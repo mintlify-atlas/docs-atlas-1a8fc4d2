@@ -1,0 +1,341 @@
+---
+title: "Timers"
+description: "Configure and use the general-purpose timer peripherals on MAX78000 — one-shot, continuous, counter, PWM, capture, and more."
+keywords: ["timer", "TMR", "PWM", "one-shot", "continuous", "MAX78000", "MSDK"]
+---
+
+The MAX78000 provides six 32-bit timer modules (TMR0–TMR5), each capable of operating independently in multiple modes. Timers 0–3 support high-speed clock sources (ISO 60 MHz, IBRO 7.3728 MHz); Timers 4–5 are low-power timers that also accept the INRO (8–30 kHz) and IBRO/8 clocks, making them suitable for wakeup-from-sleep scenarios.
+
+Each timer can be split into two independent 16-bit sub-timers (16A / 16B) when finer-grained control is needed.
+
+## Timer modes
+
+| Mode | `mxc_tmr_mode_t` constant | Description |
+|------|--------------------------|-------------|
+| One-shot | `MXC_TMR_MODE_ONESHOT` | Counts up to compare value, fires interrupt, stops |
+| Continuous | `MXC_TMR_MODE_CONTINUOUS` | Reloads and repeats at each compare match |
+| Counter | `MXC_TMR_MODE_COUNTER` | Counts external pulses on the TMR pin |
+| PWM | `MXC_TMR_MODE_PWM` | Generates a PWM signal with configurable period and duty cycle |
+| Capture | `MXC_TMR_MODE_CAPTURE` | Latches the counter value on a pin edge |
+| Compare | `MXC_TMR_MODE_COMPARE` | Toggles a pin at compare match |
+| Gated | `MXC_TMR_MODE_GATED` | Counts only while the gate pin is active |
+| Capture/Compare | `MXC_TMR_MODE_CAPTURE_COMPARE` | Combines capture and compare in one timer |
+| Dual Edge | `MXC_TMR_MODE_DUAL_EDGE` | Captures on both rising and falling edges |
+
+## Configuration structure
+
+```c
+typedef struct {
+    mxc_tmr_pres_t   pres;     /* Desired timer prescaler */
+    mxc_tmr_mode_t   mode;     /* Desired timer mode */
+    mxc_tmr_bit_mode_t bitMode; /* Desired timer bits (32, 16A, 16B) */
+    mxc_tmr_clock_t  clock;    /* Desired clock source */
+    uint32_t         cmp_cnt;  /* Compare register value in timer ticks */
+    unsigned         pol;      /* Polarity (0 or 1) */
+} mxc_tmr_cfg_t;
+```
+
+### `mxc_tmr_pres_t` — prescaler
+
+Divides the input clock before it reaches the counter. Available divisors: 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096.
+
+### `mxc_tmr_clock_t` — clock source
+
+| Constant | Source | Frequency |
+|----------|--------|-----------|
+| `MXC_TMR_APB_CLK` | PCLK | System-dependent |
+| `MXC_TMR_ISO_CLK` | ISO | 60 MHz |
+| `MXC_TMR_IBRO_CLK` | IBRO | 7.3728 MHz |
+| `MXC_TMR_ERTCO_CLK` | ERTCO | 32.768 kHz |
+| `MXC_TMR_INRO_CLK` | INRO | 8–30 kHz (TMR4/5 only) |
+| `MXC_TMR_IBRO_DIV8_CLK` | IBRO/8 | ~921.6 kHz (TMR4/5 only) |
+| `MXC_TMR_EXT_CLK` | External pin | User-supplied |
+
+### `mxc_tmr_bit_mode_t` — bit mode
+
+| Constant | Description |
+|----------|-------------|
+| `MXC_TMR_BIT_MODE_32` | Full 32-bit timer |
+| `MXC_TMR_BIT_MODE_16A` | Lower 16 bits (timer A) |
+| `MXC_TMR_BIT_MODE_16B` | Upper 16 bits (timer B) |
+
+---
+
+## Initialization and shutdown
+
+### `MXC_TMR_Init`
+
+```c
+int MXC_TMR_Init(mxc_tmr_regs_t *tmr, mxc_tmr_cfg_t *cfg, bool init_pins);
+```
+
+Initializes the timer peripheral and applies the supplied configuration. By default this function also enables the peripheral clock and configures any associated GPIO pins. To suppress clock and GPIO management (for example when handled at the application level), define `MSDK_NO_GPIO_CLK_INIT` in `project.mk`.
+
+**Parameters**
+
+| Name | Description |
+|------|-------------|
+| `tmr` | Pointer to the timer register set (`MXC_TMR0` … `MXC_TMR5`) |
+| `cfg` | Pointer to a populated `mxc_tmr_cfg_t` |
+| `init_pins` | `true` to configure associated GPIO pins; `false` to skip |
+
+**Returns** `E_NO_ERROR` on success, or a negative error code from `MXC_Error_Codes`.
+
+---
+
+### `MXC_TMR_Shutdown`
+
+```c
+void MXC_TMR_Shutdown(mxc_tmr_regs_t *tmr);
+```
+
+Disables the timer clock and releases the peripheral. Call this before reconfiguring a timer.
+
+---
+
+## Start and stop
+
+### `MXC_TMR_Start`
+
+```c
+void MXC_TMR_Start(mxc_tmr_regs_t *tmr);
+```
+
+Starts the timer. The counter begins incrementing immediately using the clock and prescaler specified during `MXC_TMR_Init`.
+
+---
+
+### `MXC_TMR_Stop`
+
+```c
+void MXC_TMR_Stop(mxc_tmr_regs_t *tmr);
+```
+
+Halts the timer counter. The current count value is preserved.
+
+---
+
+## Counter and compare access
+
+### `MXC_TMR_GetCount`
+
+```c
+uint32_t MXC_TMR_GetCount(mxc_tmr_regs_t *tmr);
+```
+
+Returns the current value of the timer counter register.
+
+---
+
+### `MXC_TMR_SetCount`
+
+```c
+void MXC_TMR_SetCount(mxc_tmr_regs_t *tmr, uint32_t cnt);
+```
+
+Sets the timer counter to `cnt`. Use this to pre-load a starting value before calling `MXC_TMR_Start`.
+
+---
+
+### `MXC_TMR_GetTime`
+
+```c
+int MXC_TMR_GetTime(mxc_tmr_regs_t *tmr, uint32_t ticks, uint32_t *time, mxc_tmr_unit_t *units);
+```
+
+Converts a raw tick count (`ticks`) to a human-readable time value. The best-fit unit is written to `*units` (nanoseconds, microseconds, milliseconds, or seconds) and the corresponding value to `*time`.
+
+**Returns** `E_NO_ERROR` or a negative error code.
+
+---
+
+### `MXC_TMR_SetCompare` / `MXC_TMR_GetCompare`
+
+```c
+void     MXC_TMR_SetCompare(mxc_tmr_regs_t *tmr, uint32_t cmp_cnt);
+uint32_t MXC_TMR_GetCompare(mxc_tmr_regs_t *tmr);
+```
+
+Write or read the compare (period) register. In PWM mode `MXC_TMR_SetCompare` sets the second transition point; use `MXC_TMR_SetPWM` for the first.
+
+---
+
+### `MXC_TMR_GetPeriod`
+
+```c
+uint32_t MXC_TMR_GetPeriod(mxc_tmr_regs_t *tmr, mxc_tmr_clock_t clock,
+                            uint32_t prescalar, uint32_t frequency);
+```
+
+Calculates the compare-register value required to produce `frequency` Hz with the given clock source and prescaler. Use this to populate `cfg.cmp_cnt` at initialization time.
+
+---
+
+## Interrupt handling
+
+### `MXC_TMR_EnableInt` / `MXC_TMR_DisableInt`
+
+```c
+void MXC_TMR_EnableInt(mxc_tmr_regs_t *tmr);
+void MXC_TMR_DisableInt(mxc_tmr_regs_t *tmr);
+```
+
+Enable or disable the timer interrupt in the peripheral. You must also configure the NVIC to receive the interrupt (see example below).
+
+---
+
+### `MXC_TMR_GetFlags` / `MXC_TMR_ClearFlags`
+
+```c
+uint32_t MXC_TMR_GetFlags(mxc_tmr_regs_t *tmr);
+void     MXC_TMR_ClearFlags(mxc_tmr_regs_t *tmr);
+```
+
+Read or clear the timer interrupt flag. Always call `MXC_TMR_ClearFlags` at the top of the ISR to avoid re-entering immediately.
+
+---
+
+### `MXC_TMR_EnableWakeup` / `MXC_TMR_DisableWakeup`
+
+```c
+void MXC_TMR_EnableWakeup(mxc_tmr_regs_t *tmr, mxc_tmr_cfg_t *cfg);
+void MXC_TMR_DisableWakeup(mxc_tmr_regs_t *tmr, mxc_tmr_cfg_t *cfg);
+```
+
+Allow or prevent a timer interrupt from waking the device from Sleep or Deep Sleep. Also call `MXC_LP_EnableTimerWakeup` in the power-sequencer to register the wakeup source at the system level.
+
+---
+
+## Timeout helpers
+
+These convenience functions build a timeout on top of any timer without requiring manual ISR wiring.
+
+### `MXC_TMR_TO_Start`
+
+```c
+void MXC_TMR_TO_Start(mxc_tmr_regs_t *tmr, uint32_t us);
+```
+
+Starts a one-shot timeout of `us` microseconds on the specified timer.
+
+---
+
+### `MXC_TMR_TO_Check`
+
+```c
+int MXC_TMR_TO_Check(mxc_tmr_regs_t *tmr);
+```
+
+Returns `E_NO_ERROR` if the timeout has not yet expired, or `E_TIME_OUT` once the period has elapsed.
+
+---
+
+### Additional timeout helpers
+
+```c
+void         MXC_TMR_TO_Stop(mxc_tmr_regs_t *tmr);      // cancel the timeout
+void         MXC_TMR_TO_Clear(mxc_tmr_regs_t *tmr);     // reset elapsed time to zero
+unsigned int MXC_TMR_TO_Elapsed(mxc_tmr_regs_t *tmr);   // microseconds elapsed
+unsigned int MXC_TMR_TO_Remaining(mxc_tmr_regs_t *tmr); // microseconds remaining
+```
+
+---
+
+## Software stopwatch
+
+### `MXC_TMR_SW_Start`
+
+```c
+void MXC_TMR_SW_Start(mxc_tmr_regs_t *tmr);
+```
+
+Starts a free-running software stopwatch on the specified timer.
+
+---
+
+### `MXC_TMR_SW_Stop`
+
+```c
+unsigned int MXC_TMR_SW_Stop(mxc_tmr_regs_t *tmr);
+```
+
+Stops the stopwatch and returns the elapsed time in microseconds.
+
+---
+
+## PWM output
+
+```c
+int MXC_TMR_SetPWM(mxc_tmr_regs_t *tmr, uint32_t pwm);
+```
+
+Sets the first transition point (duty-cycle boundary) in PWM mode. The period is set via `cfg.cmp_cnt` (or `MXC_TMR_SetCompare`). This call blocks until it is safe to update the register.
+
+---
+
+## Code example — one-shot timer
+
+The following example configures TMR5 (a low-power timer) for a 1 Hz one-shot interrupt that can also wake the device from Sleep mode.
+
+```c
+#include "tmr.h"
+#include "lp.h"
+#include "nvic_table.h"
+
+#define OST_TIMER       MXC_TMR5
+#define OST_CLOCK_SRC   MXC_TMR_INRO_CLK
+#define OST_FREQ_HZ     1
+
+void TMR5_IRQHandler(void)
+{
+    /* Always clear the interrupt flag first */
+    MXC_TMR_ClearFlags(OST_TIMER);
+    /* User action — e.g., toggle an LED or set a flag */
+}
+
+void oneshot_timer_start(void)
+{
+    mxc_tmr_cfg_t cfg;
+
+    /* Calculate the compare count for the desired frequency */
+    uint32_t period_ticks = MXC_TMR_GetPeriod(OST_TIMER, OST_CLOCK_SRC,
+                                               /*prescaler=*/1, OST_FREQ_HZ);
+
+    MXC_TMR_Shutdown(OST_TIMER);   /* Ensure the timer is stopped before reconfiguring */
+
+    cfg.pres    = MXC_TMR_PRES_1;
+    cfg.mode    = MXC_TMR_MODE_ONESHOT;
+    cfg.bitMode = MXC_TMR_BIT_MODE_32;
+    cfg.clock   = OST_CLOCK_SRC;
+    cfg.cmp_cnt = period_ticks;
+    cfg.pol     = 0;
+
+    if (MXC_TMR_Init(OST_TIMER, &cfg, true) != E_NO_ERROR) {
+        /* Handle initialization failure */
+        return;
+    }
+
+    /* Wire up the interrupt */
+    MXC_NVIC_SetVector(TMR5_IRQn, TMR5_IRQHandler);
+    NVIC_EnableIRQ(TMR5_IRQn);
+    MXC_TMR_EnableInt(OST_TIMER);
+
+    /* Allow this timer to wake from Sleep */
+    MXC_LP_EnableTimerWakeup(OST_TIMER);
+    MXC_TMR_EnableWakeup(OST_TIMER, &cfg);
+
+    MXC_TMR_Start(OST_TIMER);
+}
+```
+
+<Note>
+TMR4 and TMR5 are the low-power timers. Only they support `MXC_TMR_INRO_CLK` and `MXC_TMR_IBRO_DIV8_CLK`. Use these timers when you need the timeout to fire during or after a sleep transition.
+</Note>
+
+<Tip>
+Use `MXC_TMR_GetPeriod` to compute `cmp_cnt` rather than hard-coding tick counts. The function accounts for the selected clock frequency and prescaler, keeping your code portable across clock configurations.
+</Tip>
+
+<Warning>
+Always call `MXC_TMR_Shutdown` before re-initializing a timer. Calling `MXC_TMR_Init` on a running timer may produce undefined behavior.
+</Warning>

@@ -1,0 +1,228 @@
+---
+title: "Quick start: Command line"
+description: "Set up a command-line environment for MSDK development, then build, flash, and debug firmware using Make, OpenOCD, and GDB."
+---
+
+The MSDK's build system is driven entirely by Make, which means every operation available in the IDE-based workflows is also available from the terminal. This guide walks through environment setup, building an example project, and flashing it to a target microcontroller.
+
+<Note>
+The [MAX78002EVKIT](https://www.analog.com/en/design-center/evaluation-hardware-and-software/evaluation-boards-kits/max78002evkit.html) is used as an example throughout this guide. The same commands apply to all supported parts.
+</Note>
+
+## Setup
+
+<Tabs>
+  <Tab title="Windows">
+    On Windows, use the **MinGW** shortcut installed by the MSDK to launch an MSYS2/MinGW terminal. This shortcut points to `Tools/MSYS2/msys.bat` in the MSDK installation directory and correctly configures the environment for development — setting `MAXIM_PATH`, `PATH`, and other variables automatically.
+
+    <Warning>
+    Do not use the standard Windows Command Prompt or PowerShell for MSDK development. The GNU tools (`make`, `arm-none-eabi-gcc`, etc.) are only available inside the MSYS2 environment.
+    </Warning>
+  </Tab>
+  <Tab title="Linux / macOS">
+    #### Option 1: Source `setenv.sh` (recommended)
+
+    A `setenv.sh` script in the root of the MSDK installation configures your shell environment for development. Source it in your current session:
+
+    ```bash
+    source ~/MaximSDK/setenv.sh
+    ```
+
+    To automate this for every new shell session, add the line to your shell's startup script (`~/.bashrc`, `~/.zshrc`, etc.):
+
+    ```bash
+    echo 'source ~/MaximSDK/setenv.sh' >> ~/.bashrc
+    ```
+
+    <Note>
+    `setenv.sh` automatically checks for available MSDK updates on startup. To permanently disable update checks, follow its prompt or delete the `updates.sh` script from the MSDK root directory.
+    </Note>
+
+    #### Option 2: Manual setup
+
+    Copy the following into your shell profile/startup script and update `MAXIM_PATH` to match your MSDK installation location:
+
+    ```bash
+    # Set MAXIM_PATH to point to the MSDK
+    export MAXIM_PATH=$HOME/MaximSDK
+
+    # Add Arm Embedded GCC to PATH (v10.3)
+    export ARM_GCC_ROOT=$MAXIM_PATH/Tools/GNUTools/10.3
+    export PATH=$ARM_GCC_ROOT/bin:$PATH
+
+    # Add xPack RISC-V GCC to PATH (v12.2)
+    export XPACK_GCC_ROOT=$MAXIM_PATH/Tools/xPack/riscv-none-elf-gcc/12.2.0-3.1
+    export PATH=$XPACK_GCC_ROOT/bin:$PATH
+
+    # Add OpenOCD to PATH
+    export OPENOCD_ROOT=$MAXIM_PATH/Tools/OpenOCD
+    export PATH=$OPENOCD_ROOT:$PATH
+    ```
+  </Tab>
+</Tabs>
+
+### Verify the toolchain
+
+Run the following commands to confirm the toolchain is accessible. Each should print a version number.
+
+```bash
+arm-none-eabi-gcc -v
+arm-none-eabi-gdb -v
+make -v
+openocd -v
+```
+
+<Warning>
+"File not found" errors indicate that `MAXIM_PATH` or `PATH` is not configured correctly. Revisit the setup steps above and ensure the paths point to the correct MSDK installation directory.
+</Warning>
+
+## Building and running an example
+
+<Steps>
+  <Step title="Copy an example project">
+    Copy an example project from the MSDK's `Examples` directory to a location outside the SDK.
+
+    ```bash
+    cp -r ~/MaximSDK/Examples/MAX78002/Hello_World ~/projects/Hello_World
+    ```
+
+    <Warning>
+    Always work from a copy of the example, not the original. This preserves the MSDK's source copy for reference. The project path must not contain spaces.
+    </Warning>
+  </Step>
+  <Step title="Open a terminal in the project directory">
+    Navigate to the copied project directory.
+
+    ```bash
+    cd ~/projects/Hello_World
+    ```
+
+    On Windows, launch the MSYS2 terminal via the MinGW shortcut first, then `cd` into the project.
+  </Step>
+  <Step title="Set the target board (if needed)">
+    By default, most example projects target the `EvKit_V1` Board Support Package. If you are using a different evaluation platform, override the `BOARD` variable when running `make`:
+
+    ```bash
+    make BOARD=MAX78002EVKIT
+    ```
+
+    You can also set `BOARD` permanently inside the project's `project.mk` file:
+
+    ```makefile
+    BOARD=MAX78002EVKIT
+    ```
+
+    <Note>
+    See the [Board Support Packages](https://analogdevicesinc.github.io/msdk//USERGUIDE/#board-support-packages) section of the MSDK User Guide for a full list of valid `BOARD` values.
+    </Note>
+  </Step>
+  <Step title="Build the project">
+    Run `make` to compile the project:
+
+    ```bash
+    make
+    ```
+
+    For faster builds, use parallel execution:
+
+    ```bash
+    make -r -j --output-sync=target --no-print-directory
+    ```
+
+    <Note>
+    - `-r` disables Make's implicit rules, which improves build speed.
+    - `-j` enables parallel compilation using all available CPU threads.
+    - `--output-sync=target` prevents interleaved output from parallel jobs. This option requires Make version 4 or later.
+    </Note>
+
+    Expected output:
+
+    ```
+    Loaded project.mk
+    CC    main.c
+    CC    /home/msdk/Libraries/Boards/MAX78002/EvKit_V1/Source/board.c
+    ...
+    LD    /home/msdk/Examples/MAX78002/Hello_World/build/max78002.elf
+       text    data     bss     dec     hex filename
+      35708    2504    1156   39368    99c8 max78002.elf
+    ```
+
+    The compiled `.elf` binary is placed in the `build/` subdirectory.
+  </Step>
+  <Step title="Connect the debug adapter">
+    Connect a compatible debug adapter (e.g., MAX32625PICO, CMSIS-DAP board) between your host PC and the evaluation board. Refer to your board's Datasheet and Quick-Start Guide for hardware setup instructions.
+  </Step>
+  <Step title="Flash the firmware">
+    Flash the compiled binary using OpenOCD:
+
+    ```bash
+    make flash.openocd
+    ```
+
+    This build target launches an OpenOCD server in the background, programs the binary, verifies the write, and resets the target.
+
+    Expected output:
+
+    ```
+    Open On-Chip Debugger 0.11.0+dev-g4cdaa275b (2022-03-02-09:57)
+    ...
+    ** Programming Started **
+    ** Programming Finished **
+    ** Verify Started **
+    ** Verified OK **
+    ** Resetting Target **
+    shutdown command invoked
+    ```
+
+    The program is now running on the target. For `Hello_World`, an LED on the board should be blinking.
+  </Step>
+</Steps>
+
+## Common make targets
+
+| Command | Description |
+|---------|-------------|
+| `make` | Build the project |
+| `make -r -j` | Build with parallel execution (faster) |
+| `make clean` | Remove all build artifacts from the `build/` directory |
+| `make clean-periph` | Clean build artifacts including peripheral library objects |
+| `make flash.openocd` | Flash the binary via OpenOCD |
+| `make distclean` | Deep clean including all generated files |
+
+## Debugging with GDB
+
+To start an interactive debug session from the command line:
+
+<Steps>
+  <Step title="Start an OpenOCD server">
+    In a separate terminal window, launch OpenOCD with the appropriate target configuration:
+
+    ```bash
+    openocd -s $MAXIM_PATH/Tools/OpenOCD/scripts \
+            -f interface/cmsis-dap.cfg \
+            -f target/max78002.cfg
+    ```
+
+    OpenOCD will start a GDB server on port `3333` and a telnet server on port `4444`.
+  </Step>
+  <Step title="Connect GDB">
+    In another terminal, launch GDB and connect to the OpenOCD server:
+
+    ```bash
+    arm-none-eabi-gdb build/max78002.elf
+    ```
+
+    Inside GDB, connect to the target:
+
+    ```
+    (gdb) target extended-remote localhost:3333
+    (gdb) monitor reset halt
+    (gdb) load
+    (gdb) continue
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+For complete command-line development documentation — including build configuration variables, linker script customization, and advanced OpenOCD usage — see the [Command-Line Development section](https://analogdevicesinc.github.io/msdk//USERGUIDE/#command-line-development) of the MSDK User Guide.
+</Tip>

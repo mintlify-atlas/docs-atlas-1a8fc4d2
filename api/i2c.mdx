@@ -1,0 +1,328 @@
+---
+title: "I2C"
+description: "API reference for the Inter-Integrated Circuit (I2C) peripheral driver in the Analog Devices MSDK."
+---
+
+## Overview
+
+The I2C peripheral driver supports both master and slave operation across the full range of standard I2C speeds: standard mode (100 kHz), fast mode (400 kHz), fast-plus mode (1 MHz), and high-speed mode (3.4 MHz). Three transfer modes are available: blocking, interrupt-driven (async), and DMA.
+
+Each I2C instance is selected by passing a pointer to its register block (`MXC_I2C0`, `MXC_I2C1`, `MXC_I2C2`) to every API function.
+
+---
+
+## Speed constants
+
+The following macros define the standard I2C bus frequencies:
+
+```c
+#define MXC_I2C_STD_MODE       100000   // Standard mode: 100 kHz
+#define MXC_I2C_FAST_SPEED     400000   // Fast mode: 400 kHz
+#define MXC_I2C_FASTPLUS_SPEED 1000000  // Fast-plus mode: 1 MHz
+#define MXC_I2C_HIGH_SPEED     3400000  // High-speed mode: 3.4 MHz
+```
+
+---
+
+## Data structures
+
+### `mxc_i2c_req_t`
+
+Describes a complete I2C master transaction. Used by `MXC_I2C_MasterTransaction()` and `MXC_I2C_MasterTransactionAsync()`.
+
+```c
+typedef struct _i2c_req_t mxc_i2c_req_t;
+
+struct _i2c_req_t {
+    mxc_i2c_regs_t    *i2c;      // Pointer to I2C registers (selects I2C block)
+    unsigned int       addr;     // 7-bit or 10-bit slave address
+    unsigned char     *tx_buf;   // Buffer containing bytes to write
+    unsigned int       tx_len;   // Number of bytes to write; updated to actual count on return
+    unsigned char     *rx_buf;   // Buffer to read data into
+    unsigned int       rx_len;   // Number of bytes to read; updated to actual count on return
+    int                restart;  // 0 = stop condition; non-zero = repeated start
+    mxc_i2c_complete_cb_t callback; // Completion callback (async only; ignored by blocking variant)
+};
+```
+
+### `mxc_i2c_slave_event_t`
+
+Events delivered to the slave callback during a slave transaction.
+
+```c
+typedef enum {
+    MXC_I2C_EVT_MASTER_WR,   // Address match: master is writing to this slave
+    MXC_I2C_EVT_MASTER_RD,   // Address match: master is reading from this slave
+    MXC_I2C_EVT_RX_THRESH,   // RX FIFO has crossed the threshold level
+    MXC_I2C_EVT_TX_THRESH,   // TX FIFO has fallen below the threshold level
+    MXC_I2C_EVT_TRANS_COMP,  // Transaction ended (stop or repeated start)
+    MXC_I2C_EVT_UNDERFLOW,   // Master read while TX FIFO was empty
+    MXC_I2C_EVT_OVERFLOW,    // Master wrote while RX FIFO was full
+} mxc_i2c_slave_event_t;
+```
+
+---
+
+## Function reference
+
+### Initialization and shutdown
+
+#### `MXC_I2C_Init`
+
+Initialize and enable an I2C peripheral in master or slave mode.
+
+```c
+int MXC_I2C_Init(mxc_i2c_regs_t *i2c, int masterMode, unsigned int slaveAddr);
+```
+
+| Parameter    | Description |
+|--------------|-------------|
+| `i2c`        | Pointer to I2C registers (e.g., `MXC_I2C1`) |
+| `masterMode` | Non-zero for master mode, zero for slave mode |
+| `slaveAddr`  | 7-bit or 10-bit slave address (ignored in master mode) |
+
+Returns `E_NO_ERROR` on success, or a negative error code.
+
+#### `MXC_I2C_Shutdown`
+
+Disable and shut down an I2C peripheral.
+
+```c
+int MXC_I2C_Shutdown(mxc_i2c_regs_t *i2c);
+```
+
+#### `MXC_I2C_Reset`
+
+Reset the I2C peripheral. Call `MXC_I2C_Init()` again before use.
+
+```c
+int MXC_I2C_Reset(mxc_i2c_regs_t *i2c);
+```
+
+---
+
+### Frequency configuration
+
+#### `MXC_I2C_SetFrequency`
+
+Set the I2C bus clock frequency.
+
+```c
+int MXC_I2C_SetFrequency(mxc_i2c_regs_t *i2c, unsigned int hz);
+```
+
+Returns the actual frequency set, or a negative error code. Pass one of the `MXC_I2C_*` speed constants or any custom value in Hz.
+
+#### `MXC_I2C_GetFrequency`
+
+Get the current I2C bus clock frequency.
+
+```c
+int MXC_I2C_GetFrequency(mxc_i2c_regs_t *i2c);
+```
+
+Returns the frequency in Hz.
+
+---
+
+### Master transaction functions
+
+#### `MXC_I2C_MasterTransaction`
+
+Perform a blocking I2C master transaction. The driver generates a start condition, sends the slave address and TX data, performs a repeated start if `rx_len > 0`, receives RX data, and generates a stop (or repeated start if `restart != 0`).
+
+```c
+int MXC_I2C_MasterTransaction(mxc_i2c_req_t *req);
+```
+
+Returns `0` if all bytes were acknowledged, `1` if any transmitted byte was not acknowledged, or a negative error code.
+
+#### `MXC_I2C_MasterTransactionAsync`
+
+Perform a non-blocking I2C master transaction. The same sequence as the blocking version, but the function returns immediately and executes `req->callback` on completion.
+
+```c
+int MXC_I2C_MasterTransactionAsync(mxc_i2c_req_t *req);
+```
+
+<Note>
+`MXC_I2C_AsyncHandler()` must be called periodically — ideally from the I2C ISR — for async transactions to make progress.
+</Note>
+
+#### `MXC_I2C_MasterTransactionDMA`
+
+Perform a non-blocking master transaction using DMA to reduce ISR overhead.
+
+```c
+int MXC_I2C_MasterTransactionDMA(mxc_i2c_req_t *req);
+```
+
+<Tip>
+Call `MXC_I2C_DMA_Init()` before `MXC_I2C_MasterTransactionDMA()` to pre-acquire DMA channels and set up interrupt vectors at a known point in initialization.
+</Tip>
+
+---
+
+### Slave transaction functions
+
+#### `MXC_I2C_SlaveTransaction`
+
+Perform a blocking I2C slave transaction. Blocks until the master completes a full transaction with this slave. The `callback` is invoked for each slave event (address match, FIFO threshold, transaction complete, etc.).
+
+```c
+int MXC_I2C_SlaveTransaction(mxc_i2c_regs_t *i2c, mxc_i2c_slave_handler_t callback);
+```
+
+The slave handler signature:
+
+```c
+typedef int (*mxc_i2c_slave_handler_t)(mxc_i2c_regs_t *i2c,
+                                       mxc_i2c_slave_event_t event,
+                                       void *data);
+```
+
+For `MXC_I2C_EVT_RX_THRESH`, the return value controls acknowledgment of the last byte: return `0` to ACK, non-zero to NACK.
+
+#### `MXC_I2C_SlaveTransactionAsync`
+
+Non-blocking version of the slave transaction. The request remains active until a complete I2C transaction with this slave has been processed.
+
+```c
+int MXC_I2C_SlaveTransactionAsync(mxc_i2c_regs_t *i2c, mxc_i2c_slave_handler_t callback);
+```
+
+---
+
+### Low-level I/O
+
+#### `MXC_I2C_WriteByte`
+
+Write a single byte to the I2C bus. The bus must already be in the write phase of a transaction.
+
+```c
+int MXC_I2C_WriteByte(mxc_i2c_regs_t *i2c, unsigned char byte);
+```
+
+Returns `0` if the byte was acknowledged, `1` if NACKed, or a negative error code.
+
+#### `MXC_I2C_ReadByte`
+
+Read a single byte from the I2C bus. The bus must already be in the read phase.
+
+```c
+int MXC_I2C_ReadByte(mxc_i2c_regs_t *i2c, unsigned char *byte, int ack);
+```
+
+Pass `ack = 1` to acknowledge the byte, `0` to NACK.
+
+---
+
+### Async and DMA helpers
+
+#### `MXC_I2C_AsyncHandler`
+
+Service function for async transactions. Call from the I2C interrupt handler.
+
+```c
+void MXC_I2C_AsyncHandler(mxc_i2c_regs_t *i2c);
+```
+
+#### `MXC_I2C_DMACallback`
+
+Service function for DMA transactions. Call from the DMA interrupt handler.
+
+```c
+void MXC_I2C_DMACallback(int ch, int error);
+```
+
+#### `MXC_I2C_Recover`
+
+Attempt I2C bus recovery by bit-banging clock cycles to release a locked-up slave.
+
+```c
+int MXC_I2C_Recover(mxc_i2c_regs_t *i2c, unsigned int retries);
+```
+
+---
+
+## Example: master write and read from a sensor
+
+The following example initializes I2C1 as master at standard speed (100 kHz) and communicates with a sensor. This pattern is drawn from `Examples/MAX78000/I2C_Sensor/main.c`.
+
+```c
+#include "i2c.h"
+#include "mxc_device.h"
+
+#define I2C_MASTER  MXC_I2C1
+#define I2C_FREQ    MXC_I2C_STD_MODE   // 100 kHz
+#define SLAVE_ADDR  0x50                // Example 7-bit address
+
+int main(void)
+{
+    int error;
+    uint8_t tx_buf[2];
+    uint8_t rx_buf[4];
+
+    /* Initialize I2C1 as master */
+    error = MXC_I2C_Init(I2C_MASTER, 1, 0);
+    if (error != E_NO_ERROR) { return error; }
+
+    MXC_I2C_SetFrequency(I2C_MASTER, I2C_FREQ);
+
+    /* Write two bytes to the slave (e.g., register address + value) */
+    tx_buf[0] = 0x01;  // Register address
+    tx_buf[1] = 0x80;  // Value to write
+
+    mxc_i2c_req_t write_req = {
+        .i2c     = I2C_MASTER,
+        .addr    = SLAVE_ADDR,
+        .tx_buf  = tx_buf,
+        .tx_len  = 2,
+        .rx_buf  = NULL,
+        .rx_len  = 0,
+        .restart = 0,
+        .callback = NULL,
+    };
+
+    error = MXC_I2C_MasterTransaction(&write_req);
+    if (error != E_NO_ERROR) { return error; }
+
+    /* Read four bytes back from the same register */
+    tx_buf[0] = 0x01;  // Register address to read from
+
+    mxc_i2c_req_t read_req = {
+        .i2c     = I2C_MASTER,
+        .addr    = SLAVE_ADDR,
+        .tx_buf  = tx_buf,
+        .tx_len  = 1,
+        .rx_buf  = rx_buf,
+        .rx_len  = 4,
+        .restart = 0,
+        .callback = NULL,
+    };
+
+    error = MXC_I2C_MasterTransaction(&read_req);
+
+    MXC_I2C_Shutdown(I2C_MASTER);
+    return error;
+}
+```
+
+<Warning>
+Always check that `MXC_I2C_Init()` returns `E_NO_ERROR` before calling any other I2C functions. Calling transaction functions on an uninitialized peripheral produces undefined behavior.
+</Warning>
+
+---
+
+## Supported microcontrollers
+
+The I2C peripheral and this API are available on the following Analog Devices MAX-series parts (non-exhaustive):
+
+- MAX78000
+- MAX78002
+- MAX32690
+- MAX32670 / MAX32672
+- MAX32650 / MAX32655
+- MAX32665 / MAX32666
+
+Consult your part's data sheet for the number of I2C instances available and whether high-speed mode (3.4 MHz) is supported on each instance.

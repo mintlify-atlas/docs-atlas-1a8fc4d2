@@ -1,0 +1,56 @@
+---
+title: "Libraries overview"
+description: "An overview of all libraries available in the MSDK, including peripheral drivers, BLE, USB, RTOS, and third-party components."
+---
+
+The MSDK contains a large number of libraries, both in-house and third-party. The primary library is the [Peripheral Driver API](/libraries-peripheral-drivers), which provides a higher-level C API over hardware registers. The MSDK also ships dedicated libraries for more complex internal hardware peripherals such as USB controllers, the SDHC interface, and the Cordio BLE stack. Additional drivers for external components — TFT displays, cameras, accelerometers, and audio codecs — are available in the Miscellaneous Drivers collection.
+
+## Enabling libraries
+
+Libraries are enabled per-project using `LIB_*` build variables in your `project.mk` file. Each variable accepts `0` (disabled) or `1` (enabled).
+
+```makefile
+# project.mk
+
+LIB_FREERTOS = 1
+LIB_CORDIO   = 1
+LIB_MAXUSB   = 1
+```
+
+The full list of toggle variables is shown below. Some libraries expose additional configuration variables once enabled; see each library's page for details.
+
+| Variable | Library |
+|---|---|
+| `LIB_PERIPHDRIVERS` | Peripheral Driver API (enabled by default) |
+| `LIB_BOARD` | Board Support Package (enabled by default) |
+| `LIB_CMSIS_DSP` | CMSIS-DSP |
+| `LIB_CORDIO` | Cordio Bluetooth Low Energy |
+| `LIB_FCL` | Free Cryptographic Library |
+| `LIB_FREERTOS` | FreeRTOS |
+| `LIB_LC3` | LC3 audio codec |
+| `LIB_LITTLEFS` | littleFS filesystem |
+| `LIB_MAXUSB` | MAXUSB |
+| `LIB_TINY_USB` | TinyUSB |
+| `LIB_SDHC` | SDHC / FatFS |
+| `LIB_CLI` | CLI library |
+| `LIB_UNITY` | Unity test framework |
+
+## Available libraries
+
+<CardGroup cols={2}>
+  <Card title="Peripheral Driver API" icon="microchip" href="/libraries-peripheral-drivers">
+    The core C API for all on-chip peripherals: GPIO, UART, SPI, I2C, ADC, DMA, timers, and more. Organized by header files in `Include/` and implementation files in `Source/`.
+  </Card>
+  <Card title="Cordio Bluetooth Low Energy" icon="bluetooth" href="/libraries-ble-cordio">
+    A full BLE 5 stack forked from Packetcraft, supporting LE dual-mode topology, coded PHY, extended advertising, LE Secure Connections, and OTA firmware updates.
+  </Card>
+  <Card title="USB libraries" icon="usb" href="/libraries-usb">
+    Two USB options: MAXUSB for fine-grained event and class control, and TinyUSB for a higher-level cross-platform USB device stack.
+  </Card>
+  <Card title="FreeRTOS" icon="layer-group" href="/libraries-freertos">
+    The FreeRTOS real-time operating system with configurable heap management. Includes FreeRTOS-Plus-CLI support for UART command-line interfaces.
+  </Card>
+  <Card title="Third-party libraries" icon="boxes-stacked" href="/libraries-third-party">
+    CMSIS-DSP, SDHC/FatFS, CLI, littleFS, LC3 codec, Free Cryptographic Library, CoreMark benchmark, and the Unity test framework.
+  </Card>
+</CardGroup>

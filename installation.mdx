@@ -1,0 +1,182 @@
+---
+title: "Installation"
+description: "Download and install the MSDK on Windows 10, Linux (Ubuntu), or macOS using the automatic installer."
+---
+
+The MSDK installer bundles the full toolchain (GCC, OpenOCD, MSYS2) together with source code, libraries, examples, and IDE support files into a single package.
+
+## Prerequisites
+
+- **Administrator / elevated rights** are required to run the installer.
+
+<Warning>
+**macOS:** Download and install [Homebrew](https://brew.sh/) before running the MSDK installer. Additional steps using Homebrew are required after installation to complete the setup.
+</Warning>
+
+<Warning>
+**Ubuntu:** Several Qt installer framework packages are required, even on headless systems. Run the following command before launching the installer:
+
+```bash
+sudo apt update && sudo apt install libxcb-glx0 libxcb-icccm4 libxcb-image0 \
+  libxcb-shm0 libxcb-util1 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+  libxcb-render0 libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 \
+  libxcb-xkb1 libxcb1 libxkbcommon-x11-0 libxkbcommon0 libgl1 \
+  libusb-0.1-4 libhidapi-libusb0 libhidapi-hidraw0
+```
+</Warning>
+
+## Download
+
+Download the installer for your operating system from the links below.
+
+<CardGroup cols={3}>
+  <Card title="Windows 10" icon="windows" href="https://www.analog.com/en/design-center/evaluation-hardware-and-software/software/software-download?swpart=SFW0010820B">
+    Download the Windows installer executable (.exe)
+  </Card>
+  <Card title="Linux (Ubuntu)" icon="linux" href="https://www.analog.com/en/design-center/evaluation-hardware-and-software/software/software-download?swpart=SFW0018720B">
+    Download the Linux installer (.run)
+  </Card>
+  <Card title="macOS" icon="apple" href="https://www.analog.com/en/design-center/evaluation-hardware-and-software/software/software-download?swpart=SFW0018610B">
+    Download the macOS disk image (.dmg)
+  </Card>
+</CardGroup>
+
+<Note>
+**Linux:** The downloaded `.run` file must be made executable before running it:
+
+```bash
+chmod +x MaximMicrosSDK_linux.run
+```
+
+Alternatively, right-click the file in the Ubuntu file manager, open **Properties**, and enable **Allow executing as program**.
+</Note>
+
+<Note>
+**macOS:** The installer is distributed as a `.dmg` disk image. Double-click the downloaded file to mount it, then launch the installer executable from inside the mounted drive.
+</Note>
+
+## GUI installation
+
+<Steps>
+  <Step title="Launch the installer">
+    Download the installer for your OS and launch it. The Welcome screen appears.
+  </Step>
+  <Step title="Proceed past the Welcome screen">
+    Click **Next** to continue.
+  </Step>
+  <Step title="Choose an installation location">
+    Select or enter a destination directory for the MSDK. The default locations are:
+
+    - **Windows:** `C:\MaximSDK`
+    - **Linux/macOS:** `~/MaximSDK`
+  </Step>
+  <Step title="Select components">
+    Choose the components to install. Installing all components is recommended. At minimum, select:
+
+    - GNU Tools for ARM Embedded Processors
+    - GNU RISC-V Embedded GCC
+    - Open On-Chip Debugger
+    - MSYS2 *(Windows only)*
+    - Eclipse *(if you plan to use Eclipse)*
+  </Step>
+  <Step title="Run the installation">
+    Click **Install** to begin. The installation can be safely cancelled at any time.
+  </Step>
+  <Step title="Finish">
+    Click **Finish** to complete the installation. The MSDK directory will be populated with all selected components.
+  </Step>
+</Steps>
+
+<Warning>
+**macOS:** After the GUI installation completes, additional steps are required. See [Completing the installation on macOS](#completing-the-installation-on-macos) below.
+</Warning>
+
+## Command-line (headless) installation
+
+The installer supports a headless mode suitable for scripting and systems without a display.
+
+<Steps>
+  <Step title="Download the installer">
+    Download the installer executable for your OS and place it in an accessible directory.
+  </Step>
+  <Step title="Ensure elevated permissions">
+    <Tabs>
+      <Tab title="Windows">
+        Open a **Command Prompt** or **PowerShell** as Administrator.
+      </Tab>
+      <Tab title="Ubuntu / macOS">
+        Ensure you have `sudo` rights on your system.
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step title="Run the installer with install arguments">
+    <Tabs>
+      <Tab title="Windows">
+        ```cmd
+        .\MaximMicrosSDK_win.exe in --root C:/MaximSDK
+        ```
+      </Tab>
+      <Tab title="Ubuntu / macOS">
+        ```bash
+        sudo ./MaximMicrosSDK_linux.run in --root ~/MaximSDK
+        ```
+
+        To run completely unattended without any prompts:
+
+        ```bash
+        sudo ./MaximMicrosSDK_linux.run in --root ~/MaximSDK \
+          --accept-licenses --accept-messages --confirm-command
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  <Step title="Follow the installer prompts">
+    Accept the license agreement and confirm the installation size when prompted.
+  </Step>
+  <Step title="Fix folder ownership (Ubuntu / macOS only)">
+    Running the installer with `sudo` causes the installation directory to be owned by `root`. Change ownership back to your user account:
+
+    ```bash
+    sudo chown -R $(whoami):$(whoami) ~/MaximSDK
+    ```
+
+    <Note>
+    You can verify ownership with `ls -la ~/MaximSDK`. All entries should show your username rather than `root` after running the command above.
+    </Note>
+  </Step>
+</Steps>
+
+<Tip>
+Run `./MaximMicrosSDK_linux.run --help` (or the Windows equivalent) to see the full list of available installer commands and options, including `update`, `remove`, `list`, and `search`.
+</Tip>
+
+## Completing the installation on macOS
+
+<Warning>
+This section is **required** on macOS. Missing dependencies will prevent OpenOCD from running correctly.
+</Warning>
+
+<Steps>
+  <Step title="Install Homebrew">
+    If you have not already installed [Homebrew](https://brew.sh/), do so now by following the instructions on the Homebrew website.
+  </Step>
+  <Step title="Install OpenOCD dependencies">
+    Run the following command to install the libraries that OpenOCD requires:
+
+    ```bash
+    brew install libusb-compat libftdi hidapi libusb
+    ```
+  </Step>
+</Steps>
+
+## Maintenance and updates
+
+Every MSDK installation includes a `MaintenanceTool` executable in its root directory. Use it to:
+
+- **Update components** — retrieves the latest quarterly MSDK release
+- **Add or remove components** — modify the installed component set without reinstalling
+- **Uninstall** — remove the MSDK entirely
+
+<Note>
+Older MSDK releases are available as offline installers on the [GitHub Releases page](https://github.com/analogdevicesinc/msdk/releases). These can be used to roll back to a specific version.
+</Note>

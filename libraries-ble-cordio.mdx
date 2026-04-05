@@ -1,0 +1,99 @@
+---
+title: "Cordio Bluetooth Low Energy"
+description: "Full BLE 5 stack for MAX32655, MAX32665, MAX32680, and MAX32690. Supports dual-mode topology, coded PHY, extended advertising, LE Secure Connections, and OTA updates."
+---
+
+The Cordio Bluetooth Low Energy (BLE) library provides a full BLE stack for microcontrollers with an integrated BLE controller. It is forked from [Packetcraft](https://github.com/packetcraft-inc/stacks) and maintained as part of the MSDK.
+
+## Supported parts
+
+- MAX32655
+- MAX32665
+- MAX32680
+- MAX32690
+
+## Enabling Cordio
+
+Add the following line to your `project.mk` file:
+
+```makefile
+# project.mk
+
+LIB_CORDIO = 1
+```
+
+## Supported features
+
+- **LE dual-mode topology** — advertise or scan while maintaining multiple adjacent connections
+- **2M PHY** — high-speed PHY with 2 Mbps symbol rate
+- **Coded PHY** — forward error correction at 125 kbps or 500 kbps
+- **Extended advertising** — enhanced advertising and scanning
+- **Periodic advertising** — broadcast and receive periodic advertisements
+- **EATT** — Enhanced Attribute Protocol
+- **LE Secure Connections** — FIPS-compliant ECDH key generation (Bluetooth v4.2+)
+- **Data Length Extension** — extend the maximum data length in a connection
+- **LE Power Control** — dynamic TX power control
+- **OTA firmware update** — wireless data exchange service compatible with the ADI Attach smartphone app and [BLE-PyDex](https://github.com/EdwinFairchild/BLE-PyDex)
+
+## BLE stack layers
+
+The Cordio stack is structured in layers that closely resemble a network stack, with the application layer at the top and the physical layer at the bottom.
+
+### Application framework
+
+The App Framework handles operations common to BLE embedded applications:
+
+- Application-level device, connection, and security management
+- Simple user interface abstractions for button presses, sounds, and display
+- An abstracted device database for storing bonding data and device parameters
+
+### Profiles and services
+
+The GATT Profile defines the structure in which profile data is exchanged. A profile is composed of one or more services, and each service is composed of characteristics. Characteristics hold a value and optional descriptors. All services and characteristics are stored as Attributes on the GATT server.
+
+### Wireless Stack Framework (WSF)
+
+The Wireless Software Foundation is a small OS wrapper and porting layer used throughout the stack. It provides:
+
+- Event handler service with event and message passing
+- Timer service
+- Queue and buffer management
+- Portable data types
+- Critical sections and task locking
+- Trace and assert diagnostic services
+- Security interfaces for encryption and random number generation
+
+### Host Controller Interface (HCI)
+
+The HCI is the boundary between the Host layers (L2CAP, ATT, SM, GAP, GATT) and the Controller (Link Layer, Physical Layer). It is typically implemented over an asynchronous protocol such as UART. Multi-core SoCs can use HCI or proprietary interfaces to split the stack across CPUs.
+
+## Build options
+
+The following variables can be set in `project.mk` to configure the Cordio build:
+
+```makefile
+# project.mk
+
+# Include the Bluetooth Host layers
+BLE_HOST = 1
+
+# Include the Bluetooth Controller layers
+BLE_CONTROLLER = 1
+
+# Include peripheral role (advertise, connectable)
+INIT_PERIPHERAL = 1
+
+# Include central role (scan, initiate connections)
+INIT_CENTRAL = 0
+
+# Trace output: 0=off, 1=enabled, 2=verbose
+TRACE = 1
+```
+
+<Note>
+Most SoC applications include both `BLE_HOST` and `BLE_CONTROLLER`. Applications that test Controller layers in isolation (using an external Host over HCI) set only `BLE_CONTROLLER = 1`.
+</Note>
+
+## Further reading
+
+For complete documentation on the Cordio BLE stack — including detailed architecture diagrams, connection state machine descriptions, profile development, and HCI interface specifications — see the **Cordio BLE User Guide** at `Libraries/Cordio/docs/CORDIO_USERGUIDE.md` in the MSDK installation.

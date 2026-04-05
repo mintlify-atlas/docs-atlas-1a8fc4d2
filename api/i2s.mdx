@@ -1,0 +1,362 @@
+---
+title: "I2S"
+description: "API reference for the Inter-Integrated Sound (I2S) peripheral driver in the Analog Devices MSDK."
+---
+
+## Overview
+
+The I2S peripheral driver provides a digital audio interface for streaming PCM data to and from external codecs, DACs, and ADCs. It supports stereo and mono operation, configurable sample sizes (8–32 bits), MSB/LSB bit ordering, and left/right channel justification. Data can be transferred using blocking transactions, interrupt-driven async transactions, or DMA.
+
+Unlike the UART, SPI, and I2C drivers, the I2S driver manages a single shared I2S peripheral — functions that do not take a register pointer parameter operate on the only available instance.
+
+---
+
+## Data structures
+
+### `mxc_i2s_req_t`
+
+The central configuration and data structure for I2S initialization and transactions.
+
+```c
+typedef struct {
+    mxc_i2s_ch_mode_t  channelMode; // Clock and word-select source selection
+    mxc_i2s_stereo_t   stereoMode;  // Stereo or mono (left/right channel select)
+    mxc_i2s_wsize_t    wordSize;    // FIFO word width (byte, halfword, or word)
+    mxc_i2s_justify_t  justify;     // MSB or LSB justify
+    mxc_i2s_bitorder_t bitOrder;    // MSB first or LSB first
+    mxc_i2s_polarity_t wsPolarity;  // Word-select signal polarity
+    mxc_i2s_samplesize_t sampleSize; // Sample bit depth (0 = bitsWord); see note
+    uint16_t           clkdiv;      // Clock divider for internal SCK/WS generation
+    mxc_i2s_adjust_t   adjust;      // Bit position adjust when sampleSize < bitsWord
+    uint8_t            bitsWord;    // Number of bits per I2S word (max 31)
+    void              *rawData;     // Raw data buffer pointer
+    void              *txData;      // Transmit data buffer pointer
+    void              *rxData;      // Receive data buffer pointer
+    uint32_t           length;      // Buffer length in samples
+} mxc_i2s_req_t;
+```
+
+**Common audio configuration combinations:**
+
+| Sample width | `bitsWord` | `sampleSize` | `wordSize` |
+|---|---|---|---|
+| 8 bits / 16 samples | 8 | 8 | `MXC_I2S_WSIZE_BYTE` |
+| 16 bits / 32 samples | 16 | 16 | `MXC_I2S_WSIZE_HALFWORD` |
+| 20 bits / 40 samples | 20 | 20 | `MXC_I2S_WSIZE_WORD` |
+| 24 bits / 48 samples | 24 | 24 | `MXC_I2S_WSIZE_WORD` |
+| 24 bits / 64 samples | 32 | 24 | `MXC_I2S_WSIZE_WORD` |
+| 32 bits / 64 samples | 32 | 32 | `MXC_I2S_WSIZE_WORD` |
+
+---
+
+## Enumerations
+
+### `mxc_i2s_ch_mode_t`
+
+Selects the source for the serial clock (SCK) and word-select (WS) signals.
+
+```c
+typedef enum {
+    MXC_I2S_INTERNAL_SCK_WS_0,       // Internal SCK and WS, polarity normal
+    MXC_I2S_INTERNAL_SCK_WS_1,       // Internal SCK and WS, polarity inverted
+    MXC_I2S_EXTERNAL_SCK_INTERNAL_WS,// External SCK, internal WS
+    MXC_I2S_EXTERNAL_SCK_EXTERNAL_WS,// External SCK and WS (slave mode)
+} mxc_i2s_ch_mode_t;
+```
+
+### `mxc_i2s_stereo_t`
+
+```c
+typedef enum {
+    MXC_I2S_STEREO        = 0, // Stereo (both channels)
+    MXC_I2S_MONO_LEFT_CH  = 2, // Mono, left channel only
+    MXC_I2S_MONO_RIGHT_CH = 3, // Mono, right channel only
+} mxc_i2s_stereo_t;
+```
+
+### `mxc_i2s_wsize_t`
+
+Controls the width of each FIFO read/write.
+
+```c
+typedef enum {
+    MXC_I2S_WSIZE_BYTE,     // 8-bit FIFO transactions
+    MXC_I2S_WSIZE_HALFWORD, // 16-bit FIFO transactions
+    MXC_I2S_WSIZE_WORD,     // 32-bit FIFO transactions
+} mxc_i2s_wsize_t;
+```
+
+### `mxc_i2s_bitorder_t` / `mxc_i2s_justify_t` / `mxc_i2s_polarity_t`
+
+```c
+typedef enum { MXC_I2S_MSB_FIRST, MXC_I2S_LSB_FIRST } mxc_i2s_bitorder_t;
+typedef enum { MXC_I2S_MSB_JUSTIFY, MXC_I2S_LSB_JUSTIFY } mxc_i2s_justify_t;
+typedef enum { MXC_I2S_POL_NORMAL, MXC_I2S_POL_INVERSE } mxc_i2s_polarity_t;
+```
+
+---
+
+## Function reference
+
+### Initialization and shutdown
+
+#### `MXC_I2S_Init`
+
+Initialize the I2S peripheral using the settings in the request structure.
+
+```c
+int MXC_I2S_Init(mxc_i2s_req_t *req);
+```
+
+Configures the channel mode, stereo/mono selection, bit order, word size, clock divider, and data buffers in a single call. Returns `E_NO_ERROR` on success, or a negative error code.
+
+#### `MXC_I2S_Shutdown`
+
+Release the I2S peripheral, clear all configuration, and flush the FIFOs.
+
+```c
+int MXC_I2S_Shutdown(void);
+```
+
+---
+
+### Data configuration
+
+#### `MXC_I2S_ConfigData`
+
+Reconfigure data layout (word size, sample size) without reinitializing the full peripheral.
+
+```c
+int MXC_I2S_ConfigData(mxc_i2s_req_t *req);
+```
+
+---
+
+### Channel enable/disable
+
+#### `MXC_I2S_TXEnable` / `MXC_I2S_TXDisable`
+
+Enable or disable the transmit channel.
+
+```c
+void MXC_I2S_TXEnable(void);
+void MXC_I2S_TXDisable(void);
+```
+
+#### `MXC_I2S_RXEnable` / `MXC_I2S_RXDisable`
+
+Enable or disable the receive channel.
+
+```c
+void MXC_I2S_RXEnable(void);
+void MXC_I2S_RXDisable(void);
+```
+
+---
+
+### Sample rate and clock
+
+#### `MXC_I2S_SetSampleRate`
+
+Set the clock divider to achieve the desired sample rate automatically.
+
+```c
+int MXC_I2S_SetSampleRate(uint32_t smpl_rate, mxc_i2s_wsize_t smpl_sz, uint32_t i2s_clk);
+```
+
+| Parameter   | Description |
+|-------------|-------------|
+| `smpl_rate` | Desired sample rate in Hz (e.g., 44100, 48000) |
+| `smpl_sz`   | Word size used for each sample |
+| `i2s_clk`   | Frequency of the oscillator driving the I2S clock pin |
+
+Returns the actual sample rate achieved, or a negative error code.
+
+#### `MXC_I2S_GetSampleRate`
+
+Return the current sample rate based on the configured clock divider.
+
+```c
+int MXC_I2S_GetSampleRate(uint32_t i2s_clk);
+```
+
+#### `MXC_I2S_SetFrequency`
+
+Set the clock divider directly (called automatically by `MXC_I2S_Init`).
+
+```c
+int MXC_I2S_SetFrequency(mxc_i2s_ch_mode_t mode, uint16_t clkdiv);
+```
+
+---
+
+### Transaction functions
+
+#### `MXC_I2S_Transaction`
+
+Perform a blocking I2S transaction using the configuration and buffers in `req`.
+
+```c
+int MXC_I2S_Transaction(mxc_i2s_req_t *i2s_req);
+```
+
+#### `MXC_I2S_TransactionAsync`
+
+Set up an interrupt-driven I2S transaction.
+
+```c
+int MXC_I2S_TransactionAsync(mxc_i2s_req_t *i2s_req);
+```
+
+Register a completion callback with `MXC_I2S_RegisterAsyncCallback()` before starting an async transaction.
+
+#### `MXC_I2S_TXDMAConfig` / `MXC_I2S_RXDMAConfig`
+
+Configure DMA for transmit or receive.
+
+```c
+int MXC_I2S_TXDMAConfig(void *src_addr, int len);
+int MXC_I2S_RXDMAConfig(void *dest_addr, int len);
+```
+
+Returns the DMA channel number used, or a negative error code.
+
+---
+
+### FIFO helpers
+
+#### `MXC_I2S_FillTXFIFO`
+
+Load audio samples into the TX FIFO.
+
+```c
+int MXC_I2S_FillTXFIFO(void *txData, mxc_i2s_wsize_t wordSize, int len, int smpl_cnt);
+```
+
+Returns the number of samples written, or a negative error code.
+
+#### `MXC_I2S_ReadRXFIFO`
+
+Read audio samples from the RX FIFO.
+
+```c
+int MXC_I2S_ReadRXFIFO(void *rxData, mxc_i2s_wsize_t wordSize, int len, int smpl_cnt);
+```
+
+Returns the number of samples read, or a negative error code.
+
+#### `MXC_I2S_Flush`
+
+Flush both TX and RX FIFOs.
+
+```c
+void MXC_I2S_Flush(void);
+```
+
+---
+
+### Callbacks
+
+#### `MXC_I2S_RegisterDMACallback`
+
+Register a callback invoked at the end of a DMA transaction.
+
+```c
+void MXC_I2S_RegisterDMACallback(void (*callback)(int, int));
+```
+
+#### `MXC_I2S_RegisterAsyncCallback`
+
+Register a callback invoked at the end of an async transaction.
+
+```c
+void MXC_I2S_RegisterAsyncCallback(void (*callback)(int));
+```
+
+#### `MXC_I2S_Handler`
+
+Service function for async I2S transactions. Call from the I2S interrupt handler.
+
+```c
+void MXC_I2S_Handler(void);
+```
+
+---
+
+## Example: 16-bit stereo TX at 44.1 kHz
+
+The following example initializes I2S for stereo output, sets a 44.1 kHz sample rate, and performs a blocking transmission.
+
+```c
+#include "i2s.h"
+#include "mxc_device.h"
+
+/* 44100 Hz, 16-bit stereo — 256 samples */
+#define SAMPLE_RATE  44100
+#define NUM_SAMPLES  256
+#define EXT_CLK_HZ   12288000  // External oscillator on I2S CLK pin
+
+int16_t audio_buf[NUM_SAMPLES * 2];  // Stereo interleaved: [L, R, L, R, ...]
+
+int main(void)
+{
+    int error;
+
+    /* Generate a simple sine-like pattern for demonstration */
+    for (int i = 0; i < NUM_SAMPLES * 2; i++) {
+        audio_buf[i] = (int16_t)(i * 100);
+    }
+
+    mxc_i2s_req_t req = {
+        .channelMode = MXC_I2S_EXTERNAL_SCK_EXTERNAL_WS, // Slave to external codec clock
+        .stereoMode  = MXC_I2S_STEREO,
+        .wordSize    = MXC_I2S_WSIZE_HALFWORD,           // 16-bit FIFO words
+        .justify     = MXC_I2S_MSB_JUSTIFY,
+        .bitOrder    = MXC_I2S_MSB_FIRST,
+        .wsPolarity  = MXC_I2S_POL_NORMAL,
+        .sampleSize  = MXC_I2S_SAMPLESIZE_SIXTEEN,       // 16
+        .bitsWord    = 16,
+        .clkdiv      = 0,                                // Set by MXC_I2S_SetSampleRate
+        .adjust      = MXC_I2S_ADJUST_LEFT,
+        .txData      = audio_buf,
+        .rxData      = NULL,
+        .length      = NUM_SAMPLES,
+    };
+
+    error = MXC_I2S_Init(&req);
+    if (error != E_NO_ERROR) { return error; }
+
+    /* Set sample rate; driver calculates and applies the clock divider */
+    MXC_I2S_SetSampleRate(SAMPLE_RATE, MXC_I2S_WSIZE_HALFWORD, EXT_CLK_HZ);
+
+    MXC_I2S_TXEnable();
+
+    /* Blocking transmit */
+    error = MXC_I2S_Transaction(&req);
+
+    MXC_I2S_TXDisable();
+    MXC_I2S_Shutdown();
+    return error;
+}
+```
+
+<Tip>
+When using `MXC_I2S_EXTERNAL_SCK_EXTERNAL_WS`, the I2S peripheral acts as a slave and derives both bit clock and word select from the external codec. In this mode, `clkdiv` is ignored and you do not need to call `MXC_I2S_SetSampleRate`.
+</Tip>
+
+<Warning>
+The `sampleSize` field is optional — set it to `bitsWord` for most configurations. When `sampleSize` is less than `bitsWord`, set the `adjust` field to specify whether valid sample bits are in the MSB or LSB position of each word.
+</Warning>
+
+---
+
+## Supported microcontrollers
+
+The I2S peripheral and this API are available on the following Analog Devices MAX-series parts (non-exhaustive):
+
+- MAX78000
+- MAX78002
+- MAX32690
+- MAX32665 / MAX32666
+
+Not all MAX-series parts include an I2S peripheral. Consult your part's data sheet to confirm I2S availability and the maximum supported sample rate.

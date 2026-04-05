@@ -1,0 +1,78 @@
+---
+title: "Introduction"
+description: "An overview of the Analog Devices MSDK — what it includes, which microcontrollers it supports, and how to get started."
+---
+
+## Overview
+
+The Maxim Microcontrollers SDK (MSDK), now a part of [Analog Devices](https://www.analog.com/en/index.html), contains the necessary software and tools to develop firmware for the [MAX32xxx and MAX78xxx Microcontrollers](https://www.analog.com/en/parametricsearch/10984).
+
+The MSDK provides everything needed to go from a blank project to a running embedded application:
+
+- **Register and system startup files** for low-level development on every supported part
+- **Peripheral driver APIs** written in C covering all on-chip peripherals
+- **Board Support Packages (BSPs)** for Analog Devices evaluation platforms
+- **Example projects** for every supported microcontroller
+- **GCC-based toolchain** (Arm Embedded GCC and xPack RISC-V GCC)
+- **GNU Make build system** with a command-line interface and pre-built IDE project files
+- **Custom OpenOCD fork** for flashing and debugging over SWD/JTAG
+- **Third-party libraries and utilities** (FreeRTOS, TinyUSB, CMSIS-DSP, and more)
+
+## Supported operating systems
+
+- Windows 10
+- Linux (Ubuntu)
+- macOS
+
+## Supported languages
+
+- C
+- C++
+- Assembly (Arm and/or RISC-V instruction set, depending on the microcontroller)
+
+## Supported microcontrollers
+
+| Part | Description |
+|------|-------------|
+| [MAX32520](https://www.analog.com/en/products/max32520.html) | ChipDNA Secure Microcontroller with Secure Boot for IoT Applications |
+| [MAX32570](https://www.analog.com/en/products/max32570.html) | Low-Power Arm Cortex-M4 Microcontroller with Contactless Radio for Secure Applications *(NDA only)* |
+| [MAX32650](https://www.analog.com/en/products/max32650.html) | Ultra-Low-Power Arm Cortex-M4 with FPU — 3 MB Flash, 1 MB SRAM |
+| [MAX32651](https://www.analog.com/en/products/max32651.html) | Ultra-Low-Power Arm Cortex-M4 with FPU — 3 MB Flash, 1 MB SRAM |
+| [MAX32655](https://www.analog.com/en/products/max32655.html) | Low-Power Arm Cortex-M4 with FPU and Bluetooth 5.2 |
+| [MAX32660](https://www.analog.com/en/products/max32660.html) | Tiny, Ultra-Low-Power Arm Cortex-M4 with FPU — 256 KB Flash, 96 KB SRAM |
+| [MAX32662](https://www.analog.com/en/products/max32662.html) | Arm Cortex-M4 with FPU — 256 KB Flash, 80 KB SRAM |
+| [MAX32665–MAX32666](https://www.analog.com/en/products/max32665.html) | Low-Power Arm Cortex-M4 with FPU and Bluetooth 5 for Wearables |
+| [MAX32670](https://www.analog.com/en/products/max32670.html) | High-Reliability, Ultra-Low-Power Arm Cortex-M4 with FPU for Industrial and IoT |
+| [MAX32672](https://www.analog.com/en/products/max32672.html) | High-Reliability, Tiny, Ultra-Low-Power Arm Cortex-M4F with 12-Bit 1 MSPS ADC |
+| [MAX32675](https://www.analog.com/en/products/max32675.html) | Ultra-Low-Power Arm Cortex-M4F with Precision Analog Front-End for Industrial and Medical Sensors |
+| [MAX32680](https://www.analog.com/en/products/max32680.html) | Ultra-Low-Power Arm Cortex-M4F with Precision Analog Front-End and Bluetooth LE 5.2 |
+| [MAX32690](https://www.analog.com/en/products/max32690.html) | Arm Cortex-M4 with FPU and Bluetooth LE 5 for Industrial and Wearables |
+| [MAX78000](https://www.analog.com/en/products/max78000.html) | AI Microcontroller with Ultra-Low-Power Convolutional Neural Network Accelerator |
+| [MAX78002](https://www.analog.com/en/products/max78002.html) | AI Microcontroller with Low-Power Convolutional Neural Network Accelerator |
+
+## Supported development environments
+
+The MSDK build system provides a command-line interface that all supported IDEs build on top of. You can use whichever environment fits your workflow.
+
+- [Visual Studio Code](https://code.visualstudio.com/)
+- [Eclipse IDE](https://www.eclipseide.org/)
+- [IAR Embedded Workbench](https://www.iar.com/ewarm)
+- [Keil MDK](https://www2.keil.com/mdk5/)
+- Command-line (MSYS2 on Windows; Bash/Zsh on Linux and macOS)
+
+## Get started
+
+<CardGroup cols={3}>
+  <Card title="Installation" icon="download" href="/installation">
+    Download and install the MSDK on Windows, Linux, or macOS.
+  </Card>
+  <Card title="Quick start: VS Code" icon="code" href="/quickstart-vscode">
+    Set up Visual Studio Code and run your first example project.
+  </Card>
+  <Card title="Quick start: Eclipse" icon="gear" href="/quickstart-eclipse">
+    Create and debug a project using the Eclipse IDE.
+  </Card>
+  <Card title="Quick start: Command line" icon="terminal" href="/quickstart-cli">
+    Build and flash firmware from the terminal using Make and OpenOCD.
+  </Card>
+</CardGroup>

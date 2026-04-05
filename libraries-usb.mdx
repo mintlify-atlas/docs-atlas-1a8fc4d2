@@ -1,0 +1,77 @@
+---
+title: "USB libraries"
+description: "Two USB options for MSDK microcontrollers: MAXUSB for fine-grained event and class control, and TinyUSB for a higher-level cross-platform USB device stack."
+---
+
+The MSDK supports two libraries for USB device firmware on microcontrollers with a built-in USB controller. Both libraries allow the microcontroller to enumerate as a USB device without an external USB controller IC. Choose the one that best fits your application's requirements.
+
+<CardGroup cols={2}>
+  <Card title="MAXUSB" icon="plug">
+    Fine-grained control of USB events and device classes. Best for applications that need low-level access to USB transactions.
+  </Card>
+  <Card title="TinyUSB" icon="plug-circle-bolt">
+    Cross-platform USB stack with a higher level of abstraction. Supports most standard USB device classes with a simpler API.
+  </Card>
+</CardGroup>
+
+## MAXUSB
+
+The MAXUSB library provides a higher-level interface for the built-in USB controller hardware. It gives you finer control of USB events and device classes than TinyUSB, making it well suited for applications that need precise handling of USB enumeration and data transfers.
+
+### Supported parts
+
+- MAX32570
+- MAX32650
+- MAX32655 and MAX32656
+- MAX32665–MAX32666
+- MAX32690
+- MAX78002
+
+### Enabling MAXUSB
+
+Add the following line to your `project.mk` file:
+
+```makefile
+# project.mk
+
+LIB_MAXUSB = 1
+```
+
+---
+
+## TinyUSB
+
+[TinyUSB](https://github.com/hathach/tinyusb) is a cross-platform, open-source USB stack for embedded systems. It provides a higher level of abstraction than MAXUSB and supports most standard USB device classes out of the box.
+
+### Supported parts
+
+- MAX32650
+- MAX32665–MAX32666
+- MAX32690
+- MAX78002
+
+### Enabling TinyUSB
+
+Add the following line to your `project.mk` file:
+
+```makefile
+# project.mk
+
+LIB_TINY_USB = 1
+```
+
+---
+
+## Choosing between MAXUSB and TinyUSB
+
+| | MAXUSB | TinyUSB |
+|---|---|---|
+| Abstraction level | Lower | Higher |
+| Event control | Fine-grained | Class-level |
+| Cross-platform | No | Yes |
+| Standard class support | Manual | Built-in |
+| Supported parts | MAX32570, MAX32650, MAX32655/56, MAX32665-66, MAX32690, MAX78002 | MAX32650, MAX32665-66, MAX32690, MAX78002 |
+
+<Tip>
+If you are starting a new project and do not need low-level USB control, TinyUSB is the simpler choice. Use MAXUSB if you need precise control over USB events or if your target part is MAX32570, MAX32655, or MAX32656.
+</Tip>

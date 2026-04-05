@@ -1,0 +1,84 @@
+---
+title: "Quick start: Eclipse"
+description: "Create, build, flash, and debug an MSDK project using the Eclipse IDE and the Maxim Microcontrollers new-project wizard."
+---
+
+Eclipse is bundled with the MSDK installer as an optional component. It integrates directly with the MSDK's Make-based build system and provides a project creation wizard that lets you select a target microcontroller, Board Support Package, and example template in one step.
+
+## Prerequisites
+
+- The [MSDK is installed](/installation) with the **Eclipse** component selected.
+- A supported evaluation platform and debug adapter.
+
+<Note>
+If the MSDK is already installed without Eclipse, you can add it at any time using the [Maintenance Tool](/installation#maintenance-and-updates).
+</Note>
+
+## Setup
+
+No additional configuration is needed beyond selecting the Eclipse component during installation. Eclipse is launched using the shortcut created by the MSDK installer; this shortcut configures the environment (sets `MAXIM_PATH`, adds toolchain binaries to `PATH`) before starting Eclipse.
+
+## Building and running a project
+
+<Steps>
+  <Step title="Launch Eclipse">
+    Use the Eclipse start menu shortcut installed by the MSDK. Do not launch Eclipse directly from its install folder, as the shortcut sets required environment variables.
+  </Step>
+  <Step title="Switch to the C/C++ perspective">
+    Verify that Eclipse is in the **C/C++ perspective** by checking the icon in the top-right corner of the window. If it shows a different perspective, click the icon and select **C/C++**.
+
+    <Note>
+    The **Maxim Microcontrollers** new-project wizard only appears in the C/C++ perspective.
+    </Note>
+  </Step>
+  <Step title="Create a new project">
+    Navigate to **File → New → Maxim Microcontrollers**.
+  </Step>
+  <Step title="Enter a project name">
+    Type a name for your project and click **Next**.
+  </Step>
+  <Step title="Configure the project in the wizard">
+    Fill in the following fields:
+
+    | Field | Description |
+    |-------|-------------|
+    | **Chip type** | The target microcontroller (e.g., `MAX78000`) |
+    | **Board type** | The Board Support Package matching your evaluation platform (e.g., `EvKit_V1`) |
+    | **Example type** | The example project to use as the starting template (e.g., `Hello_World`) |
+    | **Adapter type** | The debug adapter connected to your board (e.g., `cmsis-dap`) |
+
+    <Note>
+    See the [Board Support Packages](https://analogdevicesinc.github.io/msdk//USERGUIDE/#board-support-packages) section of the MSDK User Guide for a complete list of valid board types.
+    </Note>
+  </Step>
+  <Step title="Finish creating the project">
+    Click **Finish**. Eclipse copies the selected example into a new project in your workspace.
+  </Step>
+  <Step title="Build the project">
+    Click the **Build** hammer button in the top-left toolbar. Eclipse will invoke `make` and display compiler output in the **Console** panel.
+  </Step>
+  <Step title="Select the launch configuration">
+    In the **Launch Configuration** dropdown (next to the Debug button in the toolbar), select the project you just created and ensure it is set to **Debug** mode.
+  </Step>
+  <Step title="Connect the debug adapter">
+    Connect a compatible debug adapter between your host PC and the evaluation board. Refer to your board's Datasheet and Quick-Start Guide for hardware setup details.
+  </Step>
+  <Step title="Flash and start debugging">
+    Click the **Debug** button (top-left toolbar). Eclipse will:
+    1. Build the project if there are uncommitted changes.
+    2. Flash the binary onto the target via OpenOCD.
+    3. Connect GDB and break on entry into `main`.
+
+    Eclipse will switch to the **Debug perspective** automatically.
+  </Step>
+  <Step title="Run and exercise the program">
+    Press **Resume** (`F8`) to run the program. Use the debug toolbar to step through code, inspect variables, and set breakpoints.
+  </Step>
+  <Step title="Terminate the debug session">
+    Click **Terminate** (`Ctrl+F2`) in the debug toolbar when finished.
+  </Step>
+</Steps>
+
+<Tip>
+For complete Eclipse usage documentation — including importing existing projects, configuring build variables, and working with multiple targets — see the [Eclipse section](https://analogdevicesinc.github.io/msdk//USERGUIDE/#eclipse) of the MSDK User Guide.
+</Tip>

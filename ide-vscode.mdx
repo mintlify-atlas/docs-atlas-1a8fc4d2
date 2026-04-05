@@ -1,0 +1,358 @@
+---
+title: "Visual Studio Code"
+description: "Set up and use Visual Studio Code for embedded development with the Analog Devices MSDK."
+---
+
+Support for [Visual Studio Code](https://code.visualstudio.com/) is maintained for the MSDK through the [VSCode-Maxim](https://github.com/analogdevicesinc/VSCode-Maxim) project on GitHub.
+
+## Setup
+
+The steps below only need to be done once per MSDK installation.
+
+<Steps>
+  <Step title="Install Visual Studio Code">
+    Download and install Visual Studio Code for your OS from [code.visualstudio.com](https://code.visualstudio.com/Download).
+  </Step>
+  <Step title="Install required extensions">
+    Install the following extensions from the VS Code marketplace:
+
+    - [C/C++](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) (Microsoft)
+    - [Cortex-Debug](https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug)
+  </Step>
+  <Step title="Open user settings">
+    Open the developer command prompt with `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS), type **"open user settings"**, and select **Preferences: Open User Settings (JSON)**.
+  </Step>
+  <Step title="Set MAXIM_PATH">
+    Add the following entries to your `settings.json` file:
+
+    ```json
+    "MAXIM_PATH": "Change me!  Only use forward slashes (/) for this path",
+    "update.mode": "manual",
+    "extensions.autoUpdate": false
+    ```
+
+    <Warning>
+      Set `MAXIM_PATH` to the **absolute path** of your MSDK installation. Use only forward slashes, even on Windows.
+
+      Examples:
+      - Windows: `"MAXIM_PATH": "C:/MaximSDK"`
+      - Linux/macOS: `"MAXIM_PATH": "/home/username/MaximSDK"`
+    </Warning>
+
+    <Note>
+      `"update.mode": "manual"` and `"extensions.autoUpdate": false` disable automatic updates for VS Code and its extensions. This is optional but recommended for stability. Tested version combinations for each release are listed on the [VSCode-Maxim Releases](https://github.com/analogdevicesinc/VSCode-Maxim/releases) page.
+    </Note>
+  </Step>
+  <Step title="Save and restart">
+    Save the file with `Ctrl+S` and restart VS Code.
+  </Step>
+</Steps>
+
+## Opening example projects
+
+VS Code is built around a working-directory model. The editor is always rooted in a folder, and you change that folder with **File → Open Folder...**.
+
+A "project" in VS Code is simply a folder. VS Code looks inside the opened folder for a `.vscode` sub-folder to load project-specific settings from.
+
+<Note>
+  You may need to enable viewing of hidden items in your file explorer to see the `.vscode` sub-folder.
+</Note>
+
+<Steps>
+  <Step title="Launch VS Code">
+    Open Visual Studio Code.
+  </Step>
+  <Step title="Open a project folder">
+    Select **File → Open Folder...** and navigate to an example project for your target microcontroller inside the MSDK `Examples` folder.
+
+    <Warning>
+      It is strongly recommended to copy example projects to a folder **outside** the MSDK before modifying them. This preserves the original for reference. The project path must not contain any spaces.
+    </Warning>
+  </Step>
+  <Step title="Trust the workspace">
+    VS Code will prompt for workspace trust the first time you open the folder. Select **Trust folder and enable all features**.
+  </Step>
+  <Step title="Verify the Board Support Package">
+    Confirm that the BSP is set correctly for your evaluation platform. See [How to set the BSP](#how-to-set-the-bsp) below.
+  </Step>
+</Steps>
+
+## How to set the BSP
+
+The Board Support Package (BSP) determines which evaluation board the firmware targets.
+
+<Steps>
+  <Step title="Edit settings.json">
+    Open `.vscode/settings.json` in the project and set the `"board"` option to the correct BSP value for your evaluation platform.
+
+    ```json
+    {
+      "target": "MAX78000",
+      "board": "EvKit_V1"
+    }
+    ```
+
+    See the [Board Support Packages](/board-support-packages) documentation for a table of valid values.
+  </Step>
+  <Step title="Reload the VS Code window">
+    After changing `settings.json`, reload VS Code to force a re-index of the Intellisense engine.
+
+    Open the developer command prompt with `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) and run **Reload Window**.
+  </Step>
+</Steps>
+
+## Build tasks
+
+Once a project is open, four build tasks are available via **Terminal → Run Build Task...** or the shortcut `Ctrl+Shift+B`. These tasks are configured by `.vscode/tasks.json`.
+
+| Task | Description |
+|---|---|
+| **Build** | Compiles the project with `make all`. Output is placed in the `./build` directory. |
+| **Clean** | Removes the `./build` directory and all compiled output. |
+| **Clean-Periph** | Same as Clean, but also removes compiled peripheral driver output. Use this to recompile peripheral drivers from source on the next build. |
+| **Flash** | Builds the project, then flashes the binary to the connected microcontroller. The program is halted after flashing until reset or a debugger connects. |
+| **Flash & Run** | Same as Flash, but also launches program execution once flashing is complete. |
+| **Erase Flash** | Completely erases all application code from flash memory. Useful for recovering from low-power lockouts or bad firmware. |
+
+<Note>
+  A debugger must be connected correctly to use the Flash, Flash & Run, and Erase Flash tasks. Refer to your evaluation board's datasheet and Quick-Start Guide for hardware setup instructions.
+</Note>
+
+## Flashing and debugging
+
+### Arm core debugging
+
+<Steps>
+  <Step title="Flash the program">
+    Run the **Flash** build task (`Ctrl+Shift+B` → Flash). This builds the project if needed, flashes the binary, and halts program execution to await the debugger.
+
+    <Note>
+      Flashing does not happen automatically when launching the debugger. This is intentional — it allows the debugger to restart the program quickly without a full re-flash.
+    </Note>
+  </Step>
+  <Step title="Open Run and Debug">
+    Open the **Run and Debug** panel (`Ctrl+Shift+D`) and select the **Debug Arm (Cortex-Debug)** profile.
+  </Step>
+  <Step title="Verify entry into main">
+    Confirm that the program counter enters `main` successfully.
+  </Step>
+  <Step title="Run the program">
+    Press **Continue** (`F5`) to run the program. Use the debugger control bar to step, pause, and inspect:
+
+    ```
+    Continue | Step Over | Step Into | Step Out | Restart | Stop
+    ```
+  </Step>
+</Steps>
+
+### Breakpoints
+
+Click next to any line number in the editor to set a breakpoint. Click again to remove it.
+
+Right-click on a line to add a **conditional breakpoint**. You can set the condition type using the dropdown — useful for breaking on a specific loop iteration value or when a register bit is set.
+
+### Peripheral browsing
+
+The [Cortex-Debug](https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug) extension enables a **Cortex Peripherals** panel that shows formatted register-level contents of peripheral blocks while debugging.
+
+Watch expressions can also be used to inspect registers and variables:
+
+- Append `,b` to display the value in **binary**
+- Append `,x` to display the value in **hex**
+- Standard logical and bitwise operations are supported
+- Right-click → **Set Value** to modify a register or variable during debug
+
+### Disassembly view
+
+<Steps>
+  <Step title="Launch a debug session">
+    Start a debug session using the **Debug Arm (Cortex-Debug)** profile.
+  </Step>
+  <Step title="Open the command prompt">
+    Press `Ctrl+Shift+P` to open the developer command prompt.
+  </Step>
+  <Step title="Open Disassembly View">
+    Run the **Open Disassembly View** command, or right-click in the editor and select **Open Disassembly View**.
+  </Step>
+  <Step title="Step through assembly">
+    Click the disassembly window to give it focus, then use the standard step controls to walk through assembly instructions.
+  </Step>
+</Steps>
+
+See the [Cortex-Debug Disassembly Wiki](https://github.com/Marus/cortex-debug/wiki/Disassembly-Debugging) for more details.
+
+### Dual-core debugging (Arm + RISC-V)
+
+For microcontrollers with both an Arm M4 and a RISC-V core, a **GDB (RISC-V)** launch profile is included for RISC-V debugging.
+
+<Note>
+  The RISC-V core requires setup and handoff from the Arm M4 core. Projects that support dual-core debugging are appended with the `-riscv` suffix in their folder name (for example, `mnist-riscv`).
+</Note>
+
+<Steps>
+  <Step title="Connect both debuggers">
+    Connect your Arm (SWD) and RISC-V (JTAG) debuggers. VSCode-Maxim projects are pre-configured to use the Olimex ARM-USB-OCD-H with an ARM-JTAG-20-10 adapter for the RISC-V JTAG port.
+
+    <Warning>
+      If the Olimex adapter has connection issues, verify its drivers are correctly installed. Use the [Zadig](https://zadig.akeo.ie/) tool to install WinUSB drivers if needed.
+    </Warning>
+  </Step>
+  <Step title="Open and flash the project">
+    Open the project in VS Code and run the **Flash** build task.
+  </Step>
+  <Step title="Launch the Arm debugger first">
+    In the Run and Debug panel, select the **Debug Arm (Cortex-Debug)** profile and launch it. Wait for the breakpoint to hit in `main.c`.
+  </Step>
+  <Step title="Continue to boot the RISC-V core">
+    Press **Continue** (`F5`). The Arm core code will boot the RISC-V core. You can optionally set a breakpoint on `WakeISR` to see when the RISC-V core signals it's ready.
+  </Step>
+  <Step title="Launch the RISC-V debugger">
+    Switch the debugger profile to **GDB (RISC-V)** and launch it. This connects to the Olimex adapter on a separate port.
+
+    <Note>
+      A "Signal 0" exception may appear when connecting. This is a known, harmless signaling mismatch between the RISC-V core and VS Code's debugger engine and can be safely ignored.
+    </Note>
+  </Step>
+  <Step title="Switch between debugger instances">
+    Use the dropdown on the debugger control bar to switch between the Arm and RISC-V debugger instances.
+  </Step>
+</Steps>
+
+## Project creation
+
+### Option 1: Copy a pre-made project
+
+Copying an existing example project is the recommended method for creating new projects.
+
+<Steps>
+  <Step title="Copy an example or New_Project folder">
+    Copy one of the VS Code-enabled example projects from the MSDK `Examples` folder, or use the `New_Project` folder found at `Tools/VSCode-Maxim` in the MSDK installation.
+
+    <Warning>
+      The full path to the project must not contain any spaces.
+    </Warning>
+  </Step>
+  <Step title="Rename the folder (optional)">
+    Rename the copied folder to a name that reflects your project (for example, `MyProject`).
+  </Step>
+  <Step title="Open in VS Code">
+    Select **File → Open Folder...** and open the project folder.
+  </Step>
+  <Step title="Set target and board">
+    Edit `.vscode/settings.json` and set the `"target"` and `"board"` options correctly for your microcontroller and evaluation platform.
+  </Step>
+  <Step title="Reload the window">
+    Press `Ctrl+Shift+P` → **Reload Window** to re-parse the project settings.
+  </Step>
+</Steps>
+
+### Option 2: Inject into an existing folder
+
+Use the `Inject` folder from a VSCode-Maxim release to add VS Code project files to existing source code.
+
+<Steps>
+  <Step title="Create the project folder">
+    Create your project folder at the desired location, for example:
+    ```
+    C:/Users/username/workspace/MyNewProject
+    ```
+  </Step>
+  <Step title="Copy the Inject contents">
+    Copy the **contents** of the `Inject` folder (located at `Tools/VSCode-Maxim/Inject` in the MSDK) into your project folder. The copied contents include:
+
+    ```
+    MyNewProject/
+    ├── .vscode/
+    ├── Makefile
+    └── project.mk
+    ```
+  </Step>
+  <Step title="Open in VS Code">
+    Select **File → Open Folder...** and open the project folder.
+  </Step>
+  <Step title="Set target and board">
+    Edit `.vscode/settings.json` and set the `"target"` and `"board"` options correctly.
+  </Step>
+  <Step title="Reload the window">
+    Press `Ctrl+Shift+P` → **Reload Window** to re-parse the project settings.
+  </Step>
+  <Step title="Configure the build system">
+    Configure the build system for any pre-existing source code as needed.
+  </Step>
+</Steps>
+
+## Project settings reference
+
+`.vscode/settings.json` is the main project configuration file. Values set here are parsed into the other `.json` config files in the `.vscode` folder.
+
+<Warning>
+  After making any change to `settings.json`, reload VS Code with `Ctrl+Shift+P` → **Reload Window** (or restart VS Code completely) to force a re-parse.
+</Warning>
+
+The default configuration works for most projects as long as `"target"` and `"board"` are set correctly.
+
+<Note>
+  Any field from `settings.json` can be referenced in other VS Code config files using `"${config:[fieldname]}"`.
+</Note>
+
+### Core settings
+
+| Setting | Description |
+|---|---|
+| `"MAXIM_PATH"` | Absolute path to the root of the MSDK installation. Set this in your **global** user `settings.json` during first-time setup. Use forward slashes only. |
+| `"target"` | Target microcontroller (maps to the `TARGET` build variable). Example: `"MAX78000"`. |
+| `"board"` | Target board / BSP (maps to the `BOARD` build variable). Example: `"EvKit_V1"`. |
+| `"project_name"` | Name of the project. Default: `"${workspaceFolderBasename}"`. |
+| `"program_file"` | Name of the file to flash and debug (must include file extension). Default: `"${config:project_name}.elf"`. |
+| `"symbol_file"` | File GDB loads debug symbols from (must include file extension). Default: `"${config:program_file}"`. |
+
+### Debugger settings
+
+| Setting | Description |
+|---|---|
+| `"M4_OCD_interface_file"` | OpenOCD interface file for the Arm M4 core. Must include `.cfg` extension. Default: `"cmsis-dap.cfg"`. |
+| `"M4_OCD_target_file"` | OpenOCD target file for the Arm M4 core. Must include `.cfg` extension. Default: `"${config:target}.cfg"`. |
+| `"RV_OCD_interface_file"` | OpenOCD interface file for the RISC-V core. Must include `.cfg` extension. Default: `"ftdi/olimex-arm-usb-ocd-h.cfg"`. |
+| `"RV_OCD_target_file"` | OpenOCD target file for the RISC-V core. Must include `.cfg` extension. Default: `"${config:target}_riscv.cfg"`. |
+| `"OCD_path"` | Path to the OpenOCD installation. Default: `"${config:MAXIM_PATH}/Tools/OpenOCD"`. |
+
+### Toolchain settings
+
+| Setting | Description |
+|---|---|
+| `"v_Arm_GCC"` | Version of the Arm Embedded GCC toolchain. Default: `"10.3"`. |
+| `"v_xPack_GCC"` | Version of the xPack RISC-V GCC toolchain. Default: `"12.2.0-3.1"`. |
+| `"ARM_GCC_path"` | Path to the Arm GCC toolchain. Default: `"${config:MAXIM_PATH}/Tools/GNUTools/${config:v_Arm_GCC}"`. |
+| `"xPack_GCC_path"` | Path to the RISC-V GCC toolchain. Default: `"${config:MAXIM_PATH}/Tools/xPack/riscv-none-elf-gcc/${config:v_xPack_GCC}"`. |
+| `"Make_path"` | Path to Make binaries (Windows only). Default: `"${config:MAXIM_PATH}/Tools/MSYS2/usr/bin"`. |
+
+### Intellisense settings
+
+| Setting | Description |
+|---|---|
+| `"C_Cpp.default.includePath"` | Paths searched for header (`.h`) files. Does not recurse by default — use `/**` to recurse. |
+| `"C_Cpp.default.browse.path"` | Paths searched for source (`.c`) files. Does not recurse by default — use `/**` to recurse. |
+| `"C_Cpp.default.defines"` | Compiler definitions for the Intellisense engine. Add missing definitions here if Intellisense cannot resolve them. |
+
+## Setting Intellisense search paths
+
+VS Code's Intellisense engine must be told where to find header files. By default, the MSDK peripheral drivers, C standard libraries, and all workspace sub-directories are included. If VS Code reports an error on an `#include` statement and the file exists, a search path is likely missing.
+
+<Steps>
+  <Step title="Open settings.json">
+    Open `.vscode/settings.json` in the project.
+  </Step>
+  <Step title="Add include paths">
+    Add the missing path(s) to `"C_Cpp.default.includePath"`. These paths are searched for header files and used when you select **Go to Declaration** in the editor.
+
+    ```json
+    "C_Cpp.default.includePath": [
+      "${config:MAXIM_PATH}/Libraries/CMSIS/5.9.0/CMSIS/Core/Include/**",
+      "${workspaceFolder}/**"
+    ]
+    ```
+  </Step>
+  <Step title="Add browse paths">
+    Add paths to relevant source files to `"C_Cpp.default.browse.path"`. This list is searched when you use **Go to Definition**.
+  </Step>
+</Steps>

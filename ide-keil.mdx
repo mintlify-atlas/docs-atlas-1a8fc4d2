@@ -1,0 +1,20 @@
+---
+title: "Keil MDK"
+description: "Use the Keil MDK Microcontroller Development Kit with the Analog Devices MSDK via CMSIS Pack files."
+---
+
+The [Keil MDK Microcontroller Development Kit](https://www2.keil.com/mdk5) is developed and maintained by Arm. Analog Devices maintains CMSIS Pack files that add support for ADI microcontrollers to this environment.
+
+## CMSIS Pack files
+
+CMSIS Pack files bundle the device support files — startup code, peripheral drivers, header files, and SVD register descriptions — needed for Keil MDK to target an ADI microcontroller.
+
+The latest ADI pack files are listed under the **Maxim** section of the [Keil device list](https://www.keil.com/dd2/). You can install them directly from within Keil MDK using the **Pack Installer**.
+
+## Documentation
+
+Supporting documentation for Keil MDK is maintained by Arm. Refer to the [MDK5 documentation page](https://www2.keil.com/mdk5) for user guides, reference manuals, and tutorials covering project setup, building, flashing, and debugging.
+
+<Note>
+  The MSDK command-line build system and peripheral driver libraries are not integrated into Keil MDK projects. Keil MDK projects use the CMSIS Pack files directly. For full MSDK toolchain support, use [VS Code](/ide-vscode) or [Eclipse](/ide-eclipse) instead.
+</Note>

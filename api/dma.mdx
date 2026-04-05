@@ -1,0 +1,411 @@
+---
+title: "DMA"
+description: "Use the MAX78000 DMA controller to perform high-speed memory transfers and peripheral data moves with the MSDK DMA peripheral driver."
+keywords: ["DMA", "MAX78000", "MSDK", "MXC_DMA_Init", "MXC_DMA_AcquireChannel", "mxc_dma_config_t", "direct memory access"]
+---
+
+## Overview
+
+The MAX78000 DMA controller provides up to 16 independently configurable channels for moving data between memory regions and peripheral FIFOs without CPU involvement. Each channel is independently arbitrated with a selectable priority, supports configurable burst sizes, and can be linked to virtually any peripheral request line (UART, SPI, I2C, ADC, AES, I2S, CRC).
+
+The driver exposes two layers:
+
+- **Low-level API** — acquire a channel, configure it, set source/destination, and start/stop it manually.
+- **High-level API** — single-call helpers (`MXC_DMA_MemCpy`, `MXC_DMA_DoTransfer`) for common patterns.
+
+<Note>
+Include `dma.h` and link against the PeriphDriver library. Enable the DMA interrupt in the NVIC and call `MXC_DMA_Handler()` from the ISR whenever using callbacks or the async high-level API.
+</Note>
+
+---
+
+## Data types
+
+### `mxc_dma_config_t`
+
+Core channel configuration. Pass to `MXC_DMA_ConfigChannel()`.
+
+```c
+typedef struct {
+    int              ch;        // Channel handle returned by MXC_DMA_AcquireChannel()
+    mxc_dma_reqsel_t reqsel;   // Request select: peripheral source/dest or MEM-to-MEM
+    mxc_dma_width_t  srcwd;    // Source transfer width
+    mxc_dma_width_t  dstwd;    // Destination transfer width
+    int              srcinc_en; // 1 = auto-increment source address each beat
+    int              dstinc_en; // 1 = auto-increment destination address each beat
+} mxc_dma_config_t;
+```
+
+### `mxc_dma_srcdst_t`
+
+Describes a single transfer segment. Reuse this struct with `MXC_DMA_SetSrcDst()` to change addresses between transfers.
+
+```c
+typedef struct {
+    int   ch;     // Channel handle
+    void *source; // Source buffer pointer (NULL for peripheral sources)
+    void *dest;   // Destination buffer pointer (NULL for peripheral destinations)
+    int   len;    // Number of bytes to transfer
+} mxc_dma_srcdst_t;
+```
+
+### `mxc_dma_adv_config_t`
+
+Optional advanced settings applied with `MXC_DMA_AdvConfigChannel()`.
+
+```c
+typedef struct {
+    int                 ch;          // Channel handle
+    mxc_dma_priority_t  prio;        // Arbitration priority
+    unsigned int        reqwait_en;  // Delay timeout until first transfer beat
+    mxc_dma_timeout_t   tosel;       // Timeout period
+    mxc_dma_prescale_t  pssel;       // Timeout prescaler
+    unsigned int        burst_size;  // Bytes moved per burst
+} mxc_dma_adv_config_t;
+```
+
+### `mxc_dma_priority_t` — channel priority
+
+| Value | Description |
+|---|---|
+| `MXC_DMA_PRIO_HIGH` | Highest arbitration priority |
+| `MXC_DMA_PRIO_MEDHIGH` | Medium-high |
+| `MXC_DMA_PRIO_MEDLOW` | Medium-low |
+| `MXC_DMA_PRIO_LOW` | Lowest priority |
+
+### `mxc_dma_width_t` — transfer width
+
+| Value | Description |
+|---|---|
+| `MXC_DMA_WIDTH_BYTE` | 8-bit transfers |
+| `MXC_DMA_WIDTH_HALFWORD` | 16-bit transfers |
+| `MXC_DMA_WIDTH_WORD` | 32-bit transfers |
+
+### `mxc_dma_reqsel_t` — request select (selected values)
+
+| Value | Description |
+|---|---|
+| `MXC_DMA_REQUEST_MEMTOMEM` | Memory-to-memory (software-triggered) |
+| `MXC_DMA_REQUEST_SPI0RX` / `SPI0TX` | SPI0 receive / transmit |
+| `MXC_DMA_REQUEST_SPI1RX` / `SPI1TX` | SPI1 receive / transmit |
+| `MXC_DMA_REQUEST_UART0RX` / `UART0TX` | UART0 receive / transmit |
+| `MXC_DMA_REQUEST_UART1RX` / `UART1TX` | UART1 receive / transmit |
+| `MXC_DMA_REQUEST_I2C0RX` / `I2C0TX` | I2C0 receive / transmit |
+| `MXC_DMA_REQUEST_ADC` | ADC data |
+| `MXC_DMA_REQUEST_AESRX` / `AESTX` | AES receive / transmit |
+| `MXC_DMA_REQUEST_I2SRX` / `I2STX` | I2S receive / transmit |
+| `MXC_DMA_REQUEST_CRCTX` | CRC transmit |
+
+The full list is defined in `dma.h`.
+
+### Callback types
+
+```c
+// Used with MXC_DMA_MemCpy() — called when memcpy completes
+typedef void (*mxc_dma_complete_cb_t)(void *dest);
+
+// Used with MXC_DMA_DoTransfer() — return next transfer or NULL to stop
+typedef mxc_dma_srcdst_t (*mxc_dma_trans_chain_t)(mxc_dma_srcdst_t completed);
+
+// Used with MXC_DMA_SetCallback() — ch = channel, reason = E_NO_ERROR or E_SHUTDOWN
+// void callback_fn(int ch, int reason);
+```
+
+---
+
+## API reference
+
+### `MXC_DMA_Init`
+
+```c
+int MXC_DMA_Init(void);
+```
+
+Enables the DMA peripheral clock and initializes the driver state. Must be called before any other DMA function. Returns `E_NO_ERROR` on success.
+
+---
+
+### `MXC_DMA_DeInit`
+
+```c
+void MXC_DMA_DeInit(void);
+```
+
+Releases all DMA resources and disables the peripheral clock.
+
+---
+
+### `MXC_DMA_AcquireChannel`
+
+```c
+int MXC_DMA_AcquireChannel(void);
+```
+
+Returns a handle (non-negative integer) to the first available DMA channel. Store this handle and use it in all subsequent channel-specific calls.
+
+| Return value | Meaning |
+|---|---|
+| ≥ 0 | Channel handle |
+| `E_NONE_AVAIL` | All 16 channels are in use |
+| `E_BAD_STATE` | `MXC_DMA_Init()` has not been called |
+| `E_BUSY` | Driver is locked; retry later |
+
+---
+
+### `MXC_DMA_ReleaseChannel`
+
+```c
+int MXC_DMA_ReleaseChannel(int ch);
+```
+
+Stops any in-progress transfer on `ch` and returns it to the free pool. Returns `E_NO_ERROR` on success.
+
+---
+
+### `MXC_DMA_ConfigChannel`
+
+```c
+int MXC_DMA_ConfigChannel(mxc_dma_config_t config, mxc_dma_srcdst_t srcdst);
+```
+
+Applies the basic channel configuration and sets the initial source, destination, and transfer length. For peripheral transfers, `srcdst.source` or `srcdst.dest` is ignored (the hardware address is fixed by the peripheral's FIFO). Returns `E_NO_ERROR` or `E_BAD_PARAM`.
+
+---
+
+### `MXC_DMA_AdvConfigChannel`
+
+```c
+int MXC_DMA_AdvConfigChannel(mxc_dma_adv_config_t advConfig);
+```
+
+Applies advanced settings (priority, burst size, timeout). Call after `MXC_DMA_ConfigChannel()` when defaults are insufficient.
+
+---
+
+### `MXC_DMA_SetSrcDst`
+
+```c
+int MXC_DMA_SetSrcDst(mxc_dma_srcdst_t srcdst);
+```
+
+Updates the source address, destination address, and byte count on an already-configured channel. Useful for re-arming the channel with a new buffer without reconfiguring the entire channel.
+
+---
+
+### `MXC_DMA_SetSrcReload`
+
+```c
+int MXC_DMA_SetSrcReload(mxc_dma_srcdst_t srcdstReload);
+```
+
+Configures a reload descriptor that the DMA engine automatically applies after the primary transfer finishes. This enables ping-pong or back-to-back transfers without CPU involvement between transfers.
+
+---
+
+### `MXC_DMA_SetCallback`
+
+```c
+int MXC_DMA_SetCallback(int ch, void (*callback)(int ch, int reason));
+```
+
+Registers an interrupt callback for `ch`. The callback receives the channel number and either `E_NO_ERROR` (transfer complete) or `E_SHUTDOWN` (driver shutting down).
+
+---
+
+### `MXC_DMA_SetChannelInterruptEn`
+
+```c
+int MXC_DMA_SetChannelInterruptEn(int ch, bool chdis, bool ctz);
+```
+
+Enables channel-level interrupt sources. `chdis` enables the transfer-complete interrupt; `ctz` enables the count-to-zero interrupt.
+
+---
+
+### `MXC_DMA_EnableInt` / `MXC_DMA_DisableInt`
+
+```c
+int MXC_DMA_EnableInt(int ch);
+int MXC_DMA_DisableInt(int ch);
+```
+
+Enable or disable the NVIC-level interrupt for channel `ch`.
+
+---
+
+### `MXC_DMA_ChannelEnableInt` / `MXC_DMA_ChannelDisableInt`
+
+```c
+int MXC_DMA_ChannelEnableInt(int ch, int flags);
+int MXC_DMA_ChannelDisableInt(int ch, int flags);
+```
+
+Fine-grained control over individual interrupt flag enables within a channel.
+
+---
+
+### `MXC_DMA_ChannelGetFlags` / `MXC_DMA_ChannelClearFlags`
+
+```c
+int MXC_DMA_ChannelGetFlags(int ch);
+int MXC_DMA_ChannelClearFlags(int ch, int flags);
+```
+
+Read and clear channel interrupt flags. Call from the ISR or from `MXC_DMA_Handler()` callbacks.
+
+---
+
+### `MXC_DMA_Start` / `MXC_DMA_Stop`
+
+```c
+int MXC_DMA_Start(int ch);
+int MXC_DMA_Stop(int ch);
+```
+
+Start or unconditionally stop a DMA transfer on `ch`. `MXC_DMA_Stop()` halts regardless of whether the transfer has completed.
+
+---
+
+### `MXC_DMA_Handler`
+
+```c
+void MXC_DMA_Handler(void);
+```
+
+ISR handler for all DMA channels. Call from the `DMA0_IRQHandler` (or the appropriate IRQ for the channel in use). Clears interrupt flags and dispatches registered callbacks.
+
+```c
+void DMA0_IRQHandler(void)
+{
+    MXC_DMA_Handler();
+}
+```
+
+---
+
+### High-level helpers
+
+```c
+int MXC_DMA_MemCpy(void *dest, void *src, int len,
+                   mxc_dma_complete_cb_t callback);
+```
+Performs a memory-to-memory copy of `len` bytes from `src` to `dest`. Calls `callback(dest)` when complete. If `callback` is NULL the function blocks until done.
+
+```c
+int MXC_DMA_DoTransfer(mxc_dma_config_t config,
+                        mxc_dma_srcdst_t firstSrcDst,
+                        mxc_dma_trans_chain_t callback);
+```
+Initiates a transfer described by `config` and `firstSrcDst`. After each segment completes, `callback` is called with the finished descriptor and should return the next `mxc_dma_srcdst_t` to transfer, or a descriptor with `len == 0` to stop the chain.
+
+---
+
+## Code example: memory-to-memory DMA transfer
+
+This example follows the `Examples/MAX78000/DMA/main.c` reference implementation.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "mxc_device.h"
+#include "dma.h"
+#include "nvic_table.h"
+
+#define TRANSFER_LEN 64
+
+volatile int dma_done = 0;
+int my_channel;
+
+void dma_callback(int ch, int reason)
+{
+    int flags = MXC_DMA_ChannelGetFlags(ch);
+    MXC_DMA_ChannelClearFlags(ch, flags);
+    dma_done = 1;
+}
+
+void DMA0_IRQHandler(void)
+{
+    MXC_DMA_Handler();
+}
+
+int main(void)
+{
+    uint8_t *src = malloc(TRANSFER_LEN);
+    uint8_t *dst = malloc(TRANSFER_LEN);
+
+    for (int i = 0; i < TRANSFER_LEN; i++) {
+        src[i] = (uint8_t)i;
+        dst[i] = 0;
+    }
+
+    // Enable DMA interrupt
+    NVIC_EnableIRQ(DMA0_IRQn);
+    __enable_irq();
+
+    // Initialize and acquire a channel
+    MXC_DMA_Init();
+    my_channel = MXC_DMA_AcquireChannel();
+
+    // Basic channel configuration
+    mxc_dma_config_t config = {
+        .ch        = my_channel,
+        .reqsel    = MXC_DMA_REQUEST_MEMTOMEM,
+        .srcwd     = MXC_DMA_WIDTH_WORD,
+        .dstwd     = MXC_DMA_WIDTH_WORD,
+        .srcinc_en = 1,
+        .dstinc_en = 1,
+    };
+
+    mxc_dma_srcdst_t srcdst = {
+        .ch     = my_channel,
+        .source = src,
+        .dest   = dst,
+        .len    = TRANSFER_LEN,
+    };
+
+    MXC_DMA_ConfigChannel(config, srcdst);
+
+    // Optional: advanced settings
+    mxc_dma_adv_config_t adv = {
+        .ch         = my_channel,
+        .prio       = MXC_DMA_PRIO_HIGH,
+        .reqwait_en = 0,
+        .tosel      = MXC_DMA_TIMEOUT_4_CLK,
+        .pssel      = MXC_DMA_PRESCALE_DISABLE,
+        .burst_size = 32,
+    };
+    MXC_DMA_AdvConfigChannel(adv);
+
+    // Register callback and enable interrupt
+    MXC_DMA_SetCallback(my_channel, dma_callback);
+    MXC_DMA_SetChannelInterruptEn(my_channel, false, true); // count-to-zero
+    MXC_DMA_EnableInt(my_channel);
+
+    // Start the transfer
+    dma_done = 0;
+    MXC_DMA_Start(my_channel);
+
+    while (!dma_done) {}
+
+    // Verify
+    if (memcmp(src, dst, TRANSFER_LEN) == 0) {
+        printf("DMA transfer verified.\n");
+    } else {
+        printf("Data mismatch!\n");
+    }
+
+    MXC_DMA_ReleaseChannel(my_channel);
+    free(src);
+    free(dst);
+    return 0;
+}
+```
+
+<Tip>
+For simple one-shot memory copies, `MXC_DMA_MemCpy()` handles channel acquisition, configuration, and release internally. Use the low-level API only when you need precise control over priority, burst size, or reload descriptors.
+</Tip>
+
+<Warning>
+Always call `MXC_DMA_ReleaseChannel()` when you are done with a channel. If all 16 channels are held, `MXC_DMA_AcquireChannel()` returns `E_NONE_AVAIL` and peripheral drivers that use DMA internally will fail.
+</Warning>

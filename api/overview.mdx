@@ -1,0 +1,158 @@
+---
+title: "Peripheral Driver API overview"
+description: "A C API over hardware registers that lets your application use every on-chip peripheral without touching a register directly."
+---
+
+The **Peripheral Driver API** is a core library in the MSDK that sits between your application code and the microcontroller's hardware. It exposes every on-chip peripheral — GPIO, UART, SPI, I2C, ADC, DMA, RTC, timers, and more — through a consistent, documented C interface so you never have to write to hardware registers by hand.
+
+```
+┌────────────────────────────────┐
+│        Application code        │
+└──────────────┬─────────────────┘
+               │  MXC_<PERIPH>_<Function>(...)
+┌──────────────▼─────────────────┐
+│    Peripheral Driver API       │
+│  (PeriphDrivers / mxc.h)       │
+└──────────────┬─────────────────┘
+               │  register reads / writes
+┌──────────────▼─────────────────┐
+│      Hardware peripheral       │
+│  (UART, SPI, I2C, ADC, …)      │
+└────────────────────────────────┘
+```
+
+## Directory structure
+
+The Peripheral Driver API source code lives under `Libraries/PeriphDrivers/` in your MSDK installation:
+
+<Tree>
+  <Tree.Folder name="Libraries/PeriphDrivers" defaultOpen>
+    <Tree.Folder name="Include/" defaultOpen>
+      <Tree.Folder name="MAX78000/">
+        <Tree.File name="mxc.h" />
+        <Tree.File name="mxc_sys.h" />
+        <Tree.File name="mxc_errors.h" />
+        <Tree.File name="gpio.h" />
+        <Tree.File name="uart.h" />
+        <Tree.File name="spi.h" />
+        <Tree.File name="(all peripheral headers)" />
+      </Tree.Folder>
+    </Tree.Folder>
+    <Tree.Folder name="Source/" defaultOpen>
+      <Tree.Folder name="GPIO/">
+        <Tree.File name="gpio_ai85.c" />
+        <Tree.File name="gpio_rev1.c" />
+      </Tree.Folder>
+      <Tree.Folder name="SYS/">
+        <Tree.File name="mxc_sys.c" />
+        <Tree.File name="pins_ai85.c" />
+      </Tree.Folder>
+      <Tree.File name="(all peripheral sources)" />
+    </Tree.Folder>
+    <Tree.Folder name="Documentation/">
+      <Tree.Folder name="MAX78000/">
+        <Tree.File name="index.html" />
+      </Tree.Folder>
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
+
+- **`Include/`** contains the header files (`.h`) with function _declarations_, parameter documentation, and type definitions.
+- **`Source/`** contains the implementation files (`.c`) with the actual function _definitions_ that interact with hardware registers.
+
+## Die type and revision files
+
+The `Source/` implementation files are organized by **die type** and **hardware revision**. Understanding this naming convention helps when browsing or debugging the driver source.
+
+### Die type files
+
+Files following the `_ESXX`, `_MEXX`, or `_AIXX` naming convention handle microcontroller-specific details — such as coordinating between peripheral APIs or managing chip-level constraints — before calling the revision-specific files.
+
+| Prefix | Meaning |
+| ------ | ------- |
+| `ES`   | Engineering Sample die type |
+| `ME`   | Maxim Embedded die type     |
+| `AI`   | AI-accelerator die type     |
+
+For example, `gpio_ai85.c` is the GPIO die-type file for the MAX78000 (die type AI85).
+
+### Hardware revision files
+
+Files following the `_revX` naming convention (e.g., `gpio_rev1.c`) contain the _pure_ driver implementation for a peripheral block. They interact with hardware almost entirely at the register level and are called by the die-type files.
+
+### Die types to part numbers
+
+| Part number | Die type |
+| ----------- | -------- |
+| MAX32520    | ES17     |
+| MAX32570    | ME13     |
+| MAX32650    | ME10     |
+| MAX32655    | ME17     |
+| MAX32660    | ME11     |
+| MAX32662    | ME12     |
+| MAX32665    | ME14     |
+| MAX32670    | ME15     |
+| MAX32672    | ME21     |
+| MAX32675    | ME16     |
+| MAX32680    | ME20     |
+| MAX32690    | ME18     |
+| MAX78000    | AI85     |
+| MAX78002    | AI87     |
+
+## Including in your project
+
+The Peripheral Driver API is enabled by default for all MSDK example projects. If you need to control it explicitly, set the following build variable in your `project.mk`:
+
+```makefile
+# project.mk
+LIB_PERIPHDRIVERS = 1
+```
+
+To include all peripheral drivers in your application source, add a single include to your `.c` file:
+
+```c
+#include "mxc.h"
+```
+
+`mxc.h` is the master include header. It pulls in every peripheral header — device definitions, system functions, error codes, delay utilities, GPIO pin definitions, and all peripheral APIs — so you have the entire driver surface available with one line.
+
+<Note>
+  When building for a board target (i.e. `LIB_BOARD` is defined), `mxc.h` also automatically includes `board.h` for board-specific definitions and initialization functions.
+</Note>
+
+## Naming convention
+
+All public API functions and types follow a consistent naming pattern:
+
+```
+MXC_<PERIPH>_<Function>
+```
+
+| Segment      | Meaning                                      | Example                    |
+| ------------ | -------------------------------------------- | -------------------------- |
+| `MXC_`       | Maxim/ADI microcontroller namespace prefix   | `MXC_`                     |
+| `<PERIPH>`   | Peripheral abbreviation in uppercase         | `GPIO`, `UART`, `SPI`      |
+| `<Function>` | Action in PascalCase                         | `Init`, `Read`, `SetConfig` |
+
+Examples:
+
+```c
+MXC_GPIO_Config(...)       // Configure a GPIO pin
+MXC_UART_Init(...)         // Initialize a UART peripheral
+MXC_SPI_MasterTransaction(...)  // Execute a SPI master transaction
+MXC_ADC_StartConversion(...)    // Start an ADC conversion
+MXC_DMA_Init()             // Initialize the DMA controller
+```
+
+Return values follow a negative-error convention. A return value of `E_NO_ERROR` (0) indicates success; negative values indicate specific error conditions. See [Error codes](/api/error-codes) for the full list.
+
+## Peripheral pages
+
+<CardGroup cols={2}>
+  <Card title="Error codes" icon="triangle-exclamation" href="/api/error-codes">
+    All MXC error return codes with values and descriptions.
+  </Card>
+  <Card title="System functions" icon="gear" href="/api/system">
+    System initialization, clock control, delays, assertions, and instruction cache.
+  </Card>
+</CardGroup>

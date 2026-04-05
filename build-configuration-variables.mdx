@@ -1,0 +1,181 @@
+---
+title: "Build Configuration Variables"
+description: "Complete reference for all MSDK build configuration variables, including how and where to set them, and what each variable controls."
+---
+
+The MSDK build system exposes a set of **Build Configuration Variables** — [Makefile variables](https://www.gnu.org/software/make/manual/make.html#Using-Variables) that control how a project is compiled, linked, and packaged.
+
+## How to set a variable
+
+To set a **standard** configuration variable, use the `=` operator:
+
+```makefile
+VARIABLE=VALUE
+```
+
+When a variable holds a **list of values** (documented in the tables below), use `+=` to append to it:
+
+```makefile
+VARIABLE+=VALUE1
+VARIABLE+=VALUE2
+```
+
+## Where to set a variable
+
+You can set variables in three places. The [precedence hierarchy](/build-system-overview#precedence-hierarchy) determines which value wins when the same variable is set in more than one place.
+
+<AccordionGroup>
+  <Accordion title="project.mk (recommended)">
+    Edit `project.mk` in the root of your project. This is the recommended approach for permanent, project-level configuration.
+
+    ```makefile
+    # project.mk
+
+    MFLOAT_ABI=hard   # Enable hardware floating-point acceleration
+    ```
+  </Accordion>
+  <Accordion title="Command line">
+    Pass variables directly to `make`. Useful for one-off overrides without modifying any file.
+
+    ```bash
+    make MFLOAT_ABI=hard
+    ```
+  </Accordion>
+  <Accordion title="Environment variables">
+    Export variables in your shell. Applies to all projects in the current environment.
+
+    ```bash
+    export MFLOAT_ABI=hard
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+For `TARGET` and `BOARD`, set these in your IDE's settings rather than in `project.mk` when using VS Code or Eclipse. See [Board Support Packages](/board-support-packages) for details.
+</Warning>
+
+---
+
+## Primary build variables
+
+These variables control fundamental settings such as which microcontroller and BSP to target.
+
+| Variable | Description | Details |
+|----------|-------------|---------|
+| `MAXIM_PATH` | Location of the MSDK installation | Optional. By default, the build system locates the MSDK using a relative path. Set this to an absolute path if the project lives outside the MSDK directory tree. |
+| `TARGET` | Target microcontroller | **Set in IDE settings when using VS Code or Eclipse, not in `project.mk`.** Example: `MAX78000`. |
+| `BOARD` | Board Support Package (BSP) to use | **Set in IDE settings when using VS Code or Eclipse.** See [Board Support Packages](/board-support-packages). When you change this value, clean and rebuild the project. |
+| `BSP_SEARCH_DIR` | Directory to search for the BSP | By default, `Libraries/Boards/<TARGET>` in the MSDK is searched. Use this to load a BSP from outside the MSDK. The build system looks for `$(BSP_SEARCH_DIR)/$(BOARD)/board.mk`. |
+
+---
+
+## Project build variables
+
+These variables control source code discovery, include paths, output naming, and static libraries.
+
+| Variable | Operator | Description | Details |
+|----------|----------|-------------|---------|
+| `VPATH` | `+=` | Source file search paths | Directories where Make looks for `.c` and `.cpp` files. When `AUTOSEARCH=1` (the default), all source files on these paths are automatically added to the build. When `AUTOSEARCH=0`, files must be listed in `SRCS`, but still must be found on a `VPATH`. |
+| `IPATH` | `+=` | Header file search paths | Directories where Make looks for `.h` files. Unlike `VPATH`, this is not related to `AUTOSEARCH` — header files are never added individually, only their directories. |
+| `SRCS` | `+=` | Explicit source files to include | Adds specific `.c` or `.cpp` files to the build. Most useful for adding a file by full path when `AUTOSEARCH=1`, or for listing all source files when `AUTOSEARCH=0`. |
+| `AUTOSEARCH` | `=` | Automatic source file detection | Set to `1` (default) to auto-detect all `.c`/`.cpp` files on `VPATH`. Set to `0` to require manual listing via `SRCS`. |
+| `PROJECT` | `=` | Output filename (without extension) | Controls the name of the generated binary. Default is the lowercase target name (e.g., `max78000`). **In VS Code, use the `project_name` advanced config option instead.** |
+| `PROJ_LIBS` | `+=` | Static library files to link | Add a static library by its base name. For a file named `libEXAMPLE.a`, add `EXAMPLE`. Also add the library's directory to `PROJ_LDFLAGS` (e.g., `PROJ_LDFLAGS += -Lpath/to/lib`). |
+
+---
+
+## Compiler variables
+
+These variables interface with GCC to control optimization level, compiler flags, and floating-point behavior.
+
+| Variable | Operator | Description | Details |
+|----------|----------|-------------|---------|
+| `MXC_OPTIMIZE_CFLAGS` | `=` | Optimization level | Debug builds default to `-Og`; release builds (`make release`) default to `-O2`. See [GCC Optimize Options](https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html). |
+| `PROJ_CFLAGS` | `+=` | Extra compiler flags | Accepts standard [GCC options](https://gcc.gnu.org/onlinedocs/gcc-10.4.0/gcc/Option-Summary.html) and [ARM-specific options](https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html), including `-D` definitions. |
+| `PROJ_AFLAGS` | `+=` | Assembler flags | Pass additional flags to the assembler. |
+| `PROJ_OBJS` | `+=` | Object files to add | Add pre-compiled `.o` files directly to the build. |
+| `DEBUG` | `=` | Extra debug information | Set to `1` to enable extra debug symbols and force `-Og`. Increases code size but improves debugger reliability. |
+| `MFLOAT_ABI` | `=` | Floating-point ABI | Controls hardware FPU usage. Accepted values: `hard`, `soft`, `softfp` (default). Using `hard` enables full hardware FPU instructions — **all linked libraries must also be compiled with `hard`** or a linker error will occur. |
+| `DEFAULT_OPTIMIZE_FLAGS` | `=` | Extra optimization flags | Extra flags defined in `Libraries/CMSIS/Device/Maxim/GCC/gcc.mk`. Set to empty (`DEFAULT_OPTIMIZE_FLAGS=`) to disable them entirely. |
+| `DEFAULT_WARNING_FLAGS` | `=` | Warning flags | Default warning flags defined in `gcc.mk`. Set to empty to disable. |
+| `MCPU` | `=` | Target ARM processor | Maps to GCC's `-mcpu` flag. Handled automatically by the MSDK — not typically changed manually. |
+| `MFPU` | `=` | FPU architecture | Maps to GCC's `-mfpu` flag. Handled automatically by the MSDK. |
+
+---
+
+## Linker variables
+
+| Variable | Operator | Description | Details |
+|----------|----------|-------------|---------|
+| `LINKERFILE` | `=` | Linker script to use | Specifies available memory banks, layout, and binary organization. The file should exist in `Libraries/CMSIS/Device/Maxim/<TARGET>/Source/GCC/` or in the project root directory. |
+| `PROJ_LDFLAGS` | `+=` | Extra linker flags | Flags passed directly to the linker. See [GCC Link Options](https://gcc.gnu.org/onlinedocs/gcc/Link-Options.html). Commonly used to add library search paths: `PROJ_LDFLAGS += -Lpath/to/libs`. |
+
+---
+
+## RISC-V core variables
+
+These variables are only available on microcontrollers that include a RISC-V core (such as MAX32655, MAX32680, and MAX32690).
+
+| Variable | Operator | Description | Details |
+|----------|----------|-------------|---------|
+| `RISCV_CORE` | `=` | Build for RISC-V | Set to `1` to compile the entire project using the RISC-V toolchain instead of Arm. |
+| `RISCV_LOAD` | `=` | Compile and embed a RISC-V app | **MAX32655, MAX32680, MAX32690 only.** Set to `1` to compile the project specified by `RISCV_APP` for the RISC-V core and link it into the same binary as the current Arm project. |
+| `RISCV_APP` | `=` | RISC-V application path | Used with `RISCV_LOAD`. Path to the project folder to build for the RISC-V core. Can be relative to the current project or absolute. |
+| `RISCV_PREFIX` | `=` | RISC-V toolchain prefix | Override the GCC toolchain prefix. For example, `RISCV_PREFIX = riscv-none-embed` causes the build to use `riscv-none-embed-gcc`. |
+
+---
+
+## Library toggle variables
+
+These variables enable or disable optional libraries included in the MSDK. Set to `1` to enable or `0` to disable.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LIB_BOARD` | `1` | Board Support Package (BSP). Disabling also skips `board.mk` and uses the default system init. |
+| `LIB_PERIPHDRIVERS` | `1` | Peripheral driver library. Disabling removes high-level driver functions but keeps register-level access. |
+| `LIB_CMSIS_DSP` | `0` | [CMSIS-DSP](https://www.keil.com/pack/doc/CMSIS/DSP/html/index.html) signal processing library. |
+| `LIB_CORDIO` | `0` | Cordio BLE stack. Only applicable on microcontrollers with an integrated BLE controller. |
+| `LIB_FREERTOS` | `0` | [FreeRTOS](https://freertos.org/) real-time operating system. |
+| `LIB_MAXUSB` | `0` | MAXUSB library for native USB peripherals. |
+| `LIB_TINY_USB` | `0` | TinyUSB library for native USB peripherals. |
+| `LIB_SDHC` | `0` | SDHC library for SD card support. Also enables the [FatFS](http://elm-chan.org/fsw/ff/00index_e.html) FAT filesystem. |
+| `LIB_CLI` | `0` | MSDK built-in CLI for processing UART commands. |
+| `LIB_LITTLEFS` | `0` | [littleFS](https://github.com/littlefs-project/littlefs) small filesystem for microcontrollers. |
+| `LIB_LC3` | `0` | Low Complexity Communication Codec (LC3) for audio. |
+| `LIB_FCL` | `0` | Free Cryptographic Library — software-implemented cryptographic functions. |
+| `LIB_LWIP` | `0` | lwIP lightweight TCP/IP stack. |
+
+<Note>
+Each library may expose its own additional build configuration variables when enabled. Refer to the [Libraries](/libraries-overview) section for per-library details.
+</Note>
+
+---
+
+## PeriphDrivers variables
+
+| Variable | Operator | Description | Details |
+|----------|----------|-------------|---------|
+| `MXC_SPI_VERSION` | `=` | SPI driver version | Select `v1` (legacy, default) or `v2`. See the SPI V2 developer note for migration details. |
+
+---
+
+## Secure Boot Tools (SBT) variables
+
+For microcontrollers with a secure bootloader, these variables integrate the [Secure Boot Tools](https://www.analog.com/en/design-center/evaluation-hardware-and-software/software/software-download.html?swpart=SFW0015360C). Enabling SBT adds extra Make rules such as `make sla` and `make scpa`.
+
+| Variable | Operator | Description | Details |
+|----------|----------|-------------|---------|
+| `SBT` | `=` | Enable SBT integration | Set to `1` to enable. |
+| `MAXIM_SBT_DIR` | `=` | SBT installation path | Defaults to `Tools/SBT` in the MSDK. The standalone SBT installer sets this via an environment variable automatically. |
+| `TARGET_SEC` | `=` | Secure part number variant | Some microcontrollers have multiple secure variants. Defaults are set in `$(MAXIM_SBT_DIR)/SBT-config.mk`. |
+| `SCP_PACKETS` | `=` | Output path for SCP packet folder | Defaults to `build/scp_packets`. |
+| `TEST_KEY` | `=` | Test key for signing | Defaults to the Maxim test key at `$(MAXIM_SBT_DIR)/devices/$(TARGET_SEC)/keys/maximtestcrk.key`. |
+
+---
+
+## Output variables
+
+| Variable | Operator | Description | Details |
+|----------|----------|-------------|---------|
+| `VERBOSE` | `=` | Verbose build output | Set to `1` to print the full compiler invocation for each file. Useful for troubleshooting compiler flag and include path issues. |
+| `FORCE_COLOR` | `=` | Force colorized compiler output | Set to `1` to force GCC color diagnostics (equivalent to `PROJ_CFLAGS += -fdiagnostics-color=always`). Useful in CI environments. |

@@ -1,97 +1,72 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Analog Devices MSDK"
+description: "The official software development kit for MAX32xxx and MAX78xxx microcontrollers — peripheral drivers, toolchain, board support packages, and ready-to-run examples."
 ---
 
-## Setting up
+The Maxim Microcontrollers SDK (MSDK), now part of [Analog Devices](https://www.analog.com), gives you everything needed to develop firmware for MAX32xxx and MAX78xxx microcontrollers. It includes a GCC-based toolchain, a peripheral driver API written in C, Board Support Packages for official evaluation kits, and over 50 example projects per supported part.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Download and install the MSDK on Windows, Linux, or macOS using the automatic installer.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quick Start with VS Code" icon="code" href="/quickstart-vscode">
+    Set up Visual Studio Code and run your first example project in minutes.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Peripheral Driver API" icon="microchip" href="/api/overview">
+    Explore the C API for GPIO, UART, SPI, I2C, ADC, DMA, timers, and more.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Build System" icon="wrench" href="/build-system-overview">
+    Learn how the GNU Make-based build system works and which variables you can configure.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Supported microcontrollers
 
-Everything you need to create world-class documentation.
+The MSDK supports the full range of Analog Devices MAX32xxx and MAX78xxx parts, including:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+- **MAX32520** — ChipDNA secure microcontroller for IoT
+- **MAX32650 / MAX32655 / MAX32660 / MAX32662** — Ultra-low-power Arm Cortex-M4 MCUs
+- **MAX32665–MAX32666** — Cortex-M4 with Bluetooth 5 for wearables
+- **MAX32670 / MAX32672 / MAX32675** — High-reliability industrial MCUs
+- **MAX32680 / MAX32690** — Cortex-M4 with BLE 5.2 and precision analog
+- **MAX78000 / MAX78002** — AI microcontrollers with CNN accelerators
 
-## Need inspiration?
+## Get started
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Steps>
+  <Step title="Install the MSDK">
+    Download the automatic installer for your OS from the [Installation](/installation) page and run it. The installer bundles the GCC toolchain, OpenOCD, and all SDK resources.
+  </Step>
+  <Step title="Set up your development environment">
+    Choose your IDE — [Visual Studio Code](/quickstart-vscode), [Eclipse](/quickstart-eclipse), or the [command line](/quickstart-cli) — and follow the quick-start guide for your platform.
+  </Step>
+  <Step title="Open an example project">
+    Navigate to the `Examples/<TARGET>/` folder in your MSDK installation, open an example for your target microcontroller, and build it.
+  </Step>
+  <Step title="Flash and debug">
+    Connect your evaluation board, run the `flash` build task (or `make flash` on the command line), and launch the debugger to verify the program starts in `main`.
+  </Step>
+</Steps>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Peripheral Driver API" icon="plug" href="/libraries-peripheral-drivers">
+    High-level C drivers for every on-chip peripheral — GPIO, UART, SPI, I2C, ADC, DMA, RTC, WDT, TRNG, and more.
+  </Card>
+  <Card title="Board Support Packages" icon="server" href="/board-support-packages">
+    Hardware abstraction for Analog Devices evaluation kits and a template for creating custom BSPs.
+  </Card>
+  <Card title="BLE with Cordio" icon="bluetooth" href="/libraries-ble-cordio">
+    Full Bluetooth Low Energy 5.2 stack for MAX32655, MAX32665, MAX32680, and MAX32690.
+  </Card>
+  <Card title="FreeRTOS" icon="layer-group" href="/libraries-freertos">
+    Integrated FreeRTOS support for real-time multitasking on all supported microcontrollers.
+  </Card>
+  <Card title="USB Libraries" icon="usb" href="/libraries-usb">
+    MAXUSB and TinyUSB support for USB device enumeration without an external controller.
+  </Card>
+  <Card title="Example Projects" icon="flask" href="/examples">
+    50+ example projects per MCU covering every peripheral and library in the SDK.
+  </Card>
+</CardGroup>

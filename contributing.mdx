@@ -1,0 +1,180 @@
+---
+title: 'Contributing'
+description: 'Guidelines for contributing code, examples, libraries, and documentation to the MSDK.'
+---
+
+Contributions to the MSDK are welcome. This page covers the development flow, branch conventions, PR title format, code style requirements, and the review process.
+
+## Development flow
+
+The MSDK follows the [GitHub flow](https://docs.github.com/en/get-started/quickstart/github-flow). Changes are made on a branch (or fork), then submitted as a pull request targeting the `main` branch.
+
+If you are new to Git branching, [learngitbranching.js.org](https://learngitbranching.js.org/) is a good hands-on resource.
+
+## Contributing via fork or branch
+
+<Columns cols={2}>
+  <Card title="External contributors" icon="code-fork">
+    Open a pull request from a **fork** of the repository. This is the standard GitHub contribution model for contributors outside the Analog Devices organization.
+  </Card>
+  <Card title="Internal contributors" icon="code-branch">
+    Use a **fork where possible**. If using a direct branch on the mainline repo, follow the branch naming conventions below.
+  </Card>
+</Columns>
+
+## Branch naming conventions
+
+When creating a branch directly on the mainline MSDK repository, use the following naming pattern:
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Bug fix | `fix/ticketnumber` | `fix/MSDK-123` |
+| New feature | `feature/branchname` | `feature/spi-dma-support` |
+| Generic development | `dev/branchname` | `dev/refactor-uart` |
+| New or modified example | `example/branchname` | `example/hello-world-update` |
+
+## PR title format
+
+PR titles follow this format:
+
+```
+type(scope)<!>: Subject
+```
+
+The `!` is optional and indicates a breaking change. For full details on valid types and scopes, see the [pull request template](https://github.com/analogdevicesinc/msdk/blob/main/Documentation/pull_request_template.md).
+
+### Subject rules
+
+1. The first character must be capitalized. The subject must not end with punctuation (`.`, `,`, `!`, `?`).
+2. Use imperative mood — write the subject as a command:
+   - "Add" not "Added" or "Adding"
+   - "Fix" not "Fixed" or "Fixing"
+   - "Update" not "Updated" or "Updating"
+3. Keep subjects concise. Avoid long descriptions in the title; use the PR body for additional detail.
+4. Include affected chip names (not die names) at the end of the subject, in ascending numerical order.
+5. If related to a Jira ticket or GitHub issue, begin the subject with the ticket designation.
+
+**Examples:**
+
+```
+fix(CMSIS): Rename TRIMSIR registers for MAX32670 and MAX32675
+fix(Third-Party): Remove USB DMA support for MAX32655, MAX32665, MAX32690, MAX78000, and MAX78002
+feat(Examples): Add console output in Hello_World READMEs for all parts
+fix(CMSIS): MSDK-123: Add missing I2C Target registers for MAX32670, MAX32672, and MAX32675
+```
+
+### PR format rules (workflow enforced)
+
+The following rules are enforced automatically by a CI workflow:
+
+- The `type` is case-sensitive and must be one of the listed types.
+- The `scope` is case-sensitive and must be one of the listed scopes.
+- The first word of the subject must be capitalized.
+- The subject must not end with any punctuation.
+
+<Note>
+  The auto-labeler workflow adds chip labels to a PR based on which files were modified. Use the label list to verify which parts are affected by your changes.
+</Note>
+
+## Code style and formatting
+
+The MSDK codebase follows the [Linux Kernel coding style](https://www.kernel.org/doc/html/v4.10/process/coding-style.html) and [Google's C++ Style Guide](https://google.github.io/styleguide/cppguide.html), with one exception: indentations are 4 spaces.
+
+Formatting and style are enforced by two tools that run automatically on every PR:
+
+- **cpplint** — checks for common mistakes and higher-level code patterns
+- **clang-format version 14** — enforces consistent low-level code formatting
+
+A PR cannot be merged until both checks pass.
+
+### Running cpplint
+
+Run cpplint from the **root directory** of the MSDK repo so its `CPPLINT.cfg` config file is loaded.
+
+To check a single file:
+
+```bash
+cpplint Examples/MAX78000/Hello_World/main.c
+```
+
+To recursively check an entire directory:
+
+```bash
+cpplint --recursive Examples/MAX78000
+```
+
+Resolve any reported errors, then `git add` and `git commit` your changes.
+
+### Running clang-format
+
+The MSDK uses **clang-format version 14**. If it is not available on your Linux distribution, it can be retrieved from [https://apt.llvm.org/](https://apt.llvm.org/).
+
+Run clang-format from the **root directory** of the MSDK repo so its `.clang-format` config file is loaded.
+
+To **check** a file without modifying it (dry run):
+
+```bash
+clang-format-14 --style=file --Werror --verbose -n Examples/MAX78000/CRC/main.c
+```
+
+To **apply** the formatter and overwrite the file:
+
+```bash
+clang-format-14 --style=file --Werror --verbose -i Examples/MAX78000/CRC/main.c
+```
+
+To apply the formatter to all C files in a directory recursively:
+
+```bash
+clang-format-14 --style=file --verbose -i Examples/MAX78000/ARM-DSP/**/*.c
+```
+
+<Note>
+  The `**` wildcard for recursive matching is not supported on native Windows. Use `*` instead.
+</Note>
+
+After formatting, review the changes with `git diff`, then `git add` and `git commit`.
+
+## Contributing examples
+
+<Steps>
+  <Step title="Lint and format">
+    Ensure the example project passes both cpplint and clang-format checks. See [Running cpplint](#running-cpplint) and [Running clang-format](#running-clang-format) above.
+  </Step>
+  <Step title="Copy into the Examples folder">
+    Copy the project into the `Examples/<TARGET>/` folder for each applicable target microcontroller.
+  </Step>
+  <Step title="Commit the project files">
+    Run `git add` and `git commit` for your example project files **before** running MSDKGen.
+
+    ```bash
+    git add Examples/MAX78000/MyExample
+    git commit -m "feat(Examples): Add MyExample for MAX78000"
+    ```
+  </Step>
+  <Step title="Run MSDKGen">
+    Run the [MSDKGen](https://github.com/analogdevicesinc/MSDKGen) utility to update the example's support files to the latest version.
+
+    ```bash
+    python msdkgen.py update-all --projects yourprojectname --overwrite
+    ```
+  </Step>
+  <Step title="Re-test">
+    Re-test the project after running MSDKGen to confirm it still builds and runs correctly.
+  </Step>
+  <Step title="Restore if needed">
+    If the updated support files break the project, restore them with:
+
+    ```bash
+    git restore **
+    ```
+
+    Use `git diff ./` to inspect local changes and identify the cause.
+  </Step>
+</Steps>
+
+## PR review process
+
+Before merging, ensure all GitHub Actions checks have passed. MSDK maintainers have permission to merge approved PRs even when a non-blocking action is failing.
+
+When a merger performs a **Squash and Merge**, the PR number appended automatically to the commit title must be kept. The PR title should conform to the rules above before approval so the merger only needs to press the button.

@@ -1,0 +1,244 @@
+---
+title: 'Developing from the repository'
+description: 'Set up the MSDK GitHub repository as your development environment to access the latest source code.'
+---
+
+The MSDK GitHub repository contains the latest development copies of the MSDK source code. This is useful for experienced users who want bleeding-edge resources, want to contribute changes, or need to test fixes that have not yet been included in a release.
+
+<Warning>
+  This page assumes familiarity with the MSDK and its standard setup procedures. If you are new to the MSDK, install the release version first and work from that before using the development repository.
+</Warning>
+
+<Info>
+  **Prerequisite:** Install the MSDK release via the [Automatic Installer](/installation) before proceeding. The development repository contains source code only — the toolchain is not included and must come from the release installation.
+</Info>
+
+## Cloning
+
+<Steps>
+  <Step title="Install Git">
+    Download and install [Git](https://git-scm.com/downloads).
+  </Step>
+  <Step title="Add an SSH key to your GitHub account">
+    Follow the [GitHub docs on SSH](https://docs.github.com/en/authentication/connecting-to-github-with-ssh) to generate and add an SSH key. This is required for the recommended SSH clone method.
+  </Step>
+  <Step title="Choose a destination without spaces in the path">
+    Navigate to a directory whose full path contains **no spaces**. The MSDK build system does not support paths with spaces.
+  </Step>
+  <Step title="Clone the repository">
+
+    <CodeGroup>
+
+    ```bash SSH (recommended)
+    git clone git@github.com:analogdevicesinc/msdk.git
+    ```
+
+    ```bash HTTPS
+    git clone https://github.com/analogdevicesinc/msdk.git
+    ```
+
+    </CodeGroup>
+
+  </Step>
+</Steps>
+
+## Toolchain setup
+
+The repository contains MSDK source code only. The toolchain (compilers, debugger, MSYS2) must be linked from your release MSDK installation using symbolic links.
+
+<Steps>
+  <Step title="Verify your release installation">
+    Confirm the MSDK release is installed. At minimum, the following components must be present:
+
+    - GNU RISC-V Embedded GCC
+    - GNU Tools for ARM Embedded Processors
+    - Open On-Chip Debugger
+    - MSYS2 (Windows only)
+  </Step>
+  <Step title="Create symbolic links">
+
+    Run the commands for your operating system from inside the cloned repository directory. If you installed the MSDK to a non-default location, adjust the paths accordingly.
+
+    <Tabs>
+      <Tab title="Windows">
+
+        Open a **command prompt as administrator**, then `cd` into the cloned repo and run:
+
+        ```cmd
+        mklink /D Tools\GNUTools C:\MaximSDK\Tools\GNUTools
+        mklink /D Tools\OpenOCD C:\MaximSDK\Tools\OpenOCD
+        mklink /D Tools\MSYS2 C:\MaximSDK\Tools\MSYS2
+        mklink /D Tools\xPack C:\MaximSDK\Tools\xPack
+        ```
+
+        Example output:
+
+        ```cmd
+        C:\Users\Username\repos\msdk>mklink /D Tools\GNUTools C:\MaximSDK\Tools\GNUTools
+        symbolic link created for Tools\GNUTools <<===>> C:\MaximSDK\Tools\GNUTools
+
+        C:\Users\Username\repos\msdk>mklink /D Tools\OpenOCD C:\MaximSDK\Tools\OpenOCD
+        symbolic link created for Tools\OpenOCD <<===>> C:\MaximSDK\Tools\OpenOCD
+
+        C:\Users\Username\repos\msdk>mklink /D Tools\MSYS2 C:\MaximSDK\Tools\MSYS2
+        symbolic link created for Tools\MSYS2 <<===>> C:\MaximSDK\Tools\MSYS2
+
+        C:\Users\Username\repos\msdk>mklink /D Tools\xPack C:\MaximSDK\Tools\xPack
+        symbolic link created for Tools\xPack <<===>> C:\MaximSDK\Tools\xPack
+        ```
+
+      </Tab>
+      <Tab title="Linux / macOS">
+
+        Open a terminal, `cd` into the cloned repo, and run:
+
+        ```bash
+        ln -s ~/MaximSDK/Tools/GNUTools Tools/GNUTools
+        ln -s ~/MaximSDK/Tools/OpenOCD Tools/OpenOCD
+        ln -s ~/MaximSDK/Tools/xPack Tools/xPack
+        ```
+
+        Verify the links were created:
+
+        ```bash
+        ls -la Tools
+        ```
+
+        Example output:
+
+        ```bash
+        lrwxrwxrwx 1 username username   40 Oct  4 16:32 GNUTools -> /home/username/MaximSDK/Tools/GNUTools
+        lrwxrwxrwx 1 username username   39 Oct  4 16:32 OpenOCD -> /home/username/MaximSDK/Tools/OpenOCD
+        lrwxrwxrwx 1 username username   37 Oct  4 16:32 xPack -> /home/username/MaximSDK/Tools/xPack
+        ```
+
+      </Tab>
+    </Tabs>
+
+  </Step>
+</Steps>
+
+## Environment setup
+
+After linking the toolchain, configure your development environment to point at the cloned repository instead of the release MSDK.
+
+<Tabs>
+  <Tab title="VS Code">
+
+    Set `MAXIM_PATH` to the cloned repository path in your VS Code user `settings.json` file. Comment out the release MSDK path so you can switch back easily.
+
+    ```json settings.json
+    {
+        // "MAXIM_PATH": "C:/MaximSDK",             // Release MSDK (commented out)
+        "MAXIM_PATH": "C:/Users/Username/repos/msdk", // Development repo
+        "update.mode": "manual",
+        "extensions.autoUpdate": false
+    }
+    ```
+
+    After saving, reload VS Code for the change to take effect.
+
+    <Note>
+      If you have not previously configured VS Code for the MSDK, complete the [VS Code setup guide](/quickstart-vscode) first.
+    </Note>
+
+  </Tab>
+  <Tab title="Eclipse">
+
+    There are two options depending on whether you want to configure a single project or all Eclipse sessions.
+
+    <AccordionGroup>
+      <Accordion title="Option 1 — Configure a single project">
+
+        This option applies the development repo to one Eclipse project at a time.
+
+        <Steps>
+          <Step title="Open project properties">
+            Import or open your project in Eclipse. Right-click the project and select **Properties**.
+          </Step>
+          <Step title="Navigate to environment settings">
+            Go to **C/C++ Build > Environment**.
+          </Step>
+          <Step title="Add MAXIM_PATH">
+            Add a new environment variable:
+
+            - **Name:** `MAXIM_PATH`
+            - **Value:** Path to the cloned repository, for example `C:\Users\Username\repos\msdk`
+            - Select **Add to all configurations**
+          </Step>
+          <Step title="Apply and clean">
+            Ensure **Replace native environment with the specified one** is selected, then click **Apply > Apply and Close**. Clean the project to force a rebuild using the new path.
+          </Step>
+        </Steps>
+
+      </Accordion>
+      <Accordion title="Option 2 — Configure all Eclipse sessions">
+
+        This option changes the default `MAXIM_PATH` for every Eclipse session.
+
+        <Steps>
+          <Step title="Locate setenv.bat">
+            Find `setenv.bat` in the root directory of your release MSDK installation.
+          </Step>
+          <Step title="Back up the file">
+            Copy `setenv.bat` to `setenv-release.bat` so you can revert if needed.
+          </Step>
+          <Step title="Edit MAXIM_PATH">
+            Open `setenv.bat` in a text editor. Change:
+
+            ```bat
+            set MAXIM_PATH=%CD%
+            ```
+
+            to:
+
+            ```bat
+            set MAXIM_PATH=C:\Users\Username\repos\msdk
+            ```
+
+          </Step>
+        </Steps>
+
+        <Warning>
+          This configures **all** Eclipse sessions to load resources from the development repo. Restore `setenv-release.bat` to switch back to the release MSDK.
+        </Warning>
+
+      </Accordion>
+    </AccordionGroup>
+
+  </Tab>
+  <Tab title="Command line">
+
+    Set the `MAXIM_PATH` environment variable to point at the cloned repository.
+
+    <Tabs>
+      <Tab title="Windows">
+
+        Edit `setenv.bat` in the root directory of the release MSDK installation and set `MAXIM_PATH` to the cloned repo path:
+
+        ```bat
+        set MAXIM_PATH=C:\Users\Username\repos\msdk
+        ```
+
+      </Tab>
+      <Tab title="Linux / macOS">
+
+        Edit your shell profile or startup script (for example `~/.bashrc` or `~/.zshrc`) and set:
+
+        ```bash
+        export MAXIM_PATH=~/repos/msdk
+        ```
+
+        Alternatively, edit `setenv.sh` in the root directory of the release MSDK and `source` it from your shell profile.
+
+      </Tab>
+    </Tabs>
+
+    Restart your shell after making the change.
+
+    <Note>
+      If you have not previously configured the command-line environment, see the [command-line quickstart guide](/quickstart-cli) first.
+    </Note>
+
+  </Tab>
+</Tabs>

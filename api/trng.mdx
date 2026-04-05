@@ -1,0 +1,233 @@
+---
+title: "True Random Number Generator (TRNG)"
+description: "Generate cryptographically strong random bytes on the MAX78000 using the hardware TRNG peripheral driver from the Analog Devices MSDK."
+keywords: ["TRNG", "MAX78000", "MSDK", "random number generator", "MXC_TRNG_Init", "MXC_TRNG_Random", "entropy"]
+---
+
+## Overview
+
+The MAX78000 includes a dedicated True Random Number Generator (TRNG) hardware block that continuously harvests entropy from an analog noise source on-chip. The output passes an online health-check and is conditioned before delivery to software, meeting the requirements of NIST SP 800-90B. The TRNG block can also feed random key material directly into the AES engine without exposing the key to the CPU.
+
+The driver supports three usage patterns:
+
+- **`MXC_TRNG_RandomInt()`** — returns a single 32-bit random integer synchronously.
+- **`MXC_TRNG_Random()`** — fills an arbitrary-length buffer synchronously.
+- **`MXC_TRNG_RandomAsync()`** — fills a buffer in the background and calls a completion callback from the TRNG ISR.
+
+<Note>
+Include `trng.h` and link against the PeriphDriver library. No GPIO configuration is required; the entropy source is fully internal.
+</Note>
+
+---
+
+## Data types
+
+### Callback type
+
+```c
+typedef void (*mxc_trng_complete_t)(void *req, int result);
+```
+
+Passed to `MXC_TRNG_RandomAsync()`. Called from the TRNG ISR when all requested bytes have been generated. `req` is always NULL for the current implementation; `result` is `E_NO_ERROR` on success or a negative error code.
+
+---
+
+## API reference
+
+### `MXC_TRNG_Init`
+
+```c
+int MXC_TRNG_Init(void);
+```
+
+Enables the TRNG peripheral clock and powers up the entropy source. Must be called before any random number function. Returns `E_NO_ERROR` on success.
+
+---
+
+### `MXC_TRNG_Shutdown`
+
+```c
+int MXC_TRNG_Shutdown(void);
+```
+
+Disables the TRNG and powers down the entropy source. Call when random data is no longer needed to reduce current draw. Returns `E_NO_ERROR` on success.
+
+<Tip>
+If you need random bytes infrequently, call `MXC_TRNG_Init()` before each generation burst and `MXC_TRNG_Shutdown()` immediately after to minimize power consumption.
+</Tip>
+
+---
+
+### `MXC_TRNG_RandomInt`
+
+```c
+int MXC_TRNG_RandomInt(void);
+```
+
+Blocks until the TRNG produces a fresh 32-bit random integer. Returns the random value directly. This is the lowest-overhead call when you need a single word of entropy.
+
+---
+
+### `MXC_TRNG_Random`
+
+```c
+int MXC_TRNG_Random(uint8_t *data, uint32_t len);
+```
+
+Fills the buffer at `data` with `len` random bytes, blocking until all bytes are ready. The TRNG produces 32 bits at a time internally; the driver handles splitting and alignment.
+
+| Parameter | Description |
+|---|---|
+| `data` | Pointer to output buffer (must be at least `len` bytes) |
+| `len` | Number of random bytes to generate |
+
+Returns `E_NO_ERROR` on success, or a negative error code.
+
+---
+
+### `MXC_TRNG_RandomAsync`
+
+```c
+void MXC_TRNG_RandomAsync(uint8_t *data, uint32_t len,
+                           mxc_trng_complete_t callback);
+```
+
+Starts generating `len` random bytes into `data` in the background. Returns immediately. `callback` is invoked from the TRNG interrupt handler when all bytes have been written to `data`.
+
+<Warning>
+You must enable the TRNG interrupt (`NVIC_EnableIRQ(TRNG_IRQn)`) and call `MXC_TRNG_Handler()` from your `TRNG_IRQHandler` before calling this function. The buffer at `data` must remain valid until the callback fires.
+</Warning>
+
+---
+
+### `MXC_TRNG_Handler`
+
+```c
+void MXC_TRNG_Handler(void);
+```
+
+ISR dispatcher for the TRNG. Call from `TRNG_IRQHandler` when using the async API. Handles interrupt flag clearing and invokes the completion callback.
+
+```c
+void TRNG_IRQHandler(void)
+{
+    MXC_TRNG_Handler();
+}
+```
+
+---
+
+### Interrupt control
+
+```c
+void MXC_TRNG_EnableInt(void);
+void MXC_TRNG_DisableInt(void);
+```
+
+Enable or disable the TRNG peripheral interrupt. The async API manages these internally, but you may call them directly for custom interrupt handling.
+
+---
+
+### `MXC_TRNG_GenerateKey`
+
+```c
+void MXC_TRNG_GenerateKey(void);
+```
+
+Generates a 128-bit AES key entirely in hardware and loads it directly into the AES key registers. The key is never visible to the CPU, making this the most secure way to provision ephemeral AES keys.
+
+---
+
+## Code example: generate random bytes
+
+This example mirrors `Examples/MAX78000/TRNG/main.c` and shows both synchronous and asynchronous usage.
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include "mxc_device.h"
+#include "trng.h"
+#include "nvic_table.h"
+
+#define RND_LEN 16
+
+uint8_t rand_buf[RND_LEN];
+
+// --- Synchronous usage ---
+
+void generate_sync(void)
+{
+    MXC_TRNG_Init();
+    MXC_TRNG_Random(rand_buf, RND_LEN);
+    MXC_TRNG_Shutdown();
+
+    printf("Random bytes (sync):\n");
+    for (int i = 0; i < RND_LEN; i++) {
+        printf("0x%02x ", rand_buf[i]);
+    }
+    printf("\n");
+}
+
+// --- Asynchronous usage ---
+
+volatile int trng_done = 0;
+
+void trng_callback(void *req, int result)
+{
+    trng_done = 1;
+}
+
+void TRNG_IRQHandler(void)
+{
+    MXC_TRNG_Handler();
+}
+
+void generate_async(void)
+{
+    memset(rand_buf, 0, sizeof(rand_buf));
+
+    MXC_TRNG_Init();
+
+    NVIC_EnableIRQ(TRNG_IRQn);
+    trng_done = 0;
+    MXC_TRNG_RandomAsync(rand_buf, RND_LEN, trng_callback);
+
+    while (!trng_done) {}  // wait for interrupt
+
+    MXC_TRNG_Shutdown();
+
+    printf("Random bytes (async):\n");
+    for (int i = 0; i < RND_LEN; i++) {
+        printf("0x%02x ", rand_buf[i]);
+    }
+    printf("\n");
+}
+
+int main(void)
+{
+    printf("=== TRNG Example ===\n");
+    generate_sync();
+    generate_async();
+    printf("Done.\n");
+    return 0;
+}
+```
+
+### Single random integer
+
+```c
+#include "trng.h"
+
+uint32_t get_random_word(void)
+{
+    MXC_TRNG_Init();
+    int value = MXC_TRNG_RandomInt();
+    MXC_TRNG_Shutdown();
+    return (uint32_t)value;
+}
+```
+
+<Note>
+The TRNG hardware generates one 32-bit word every ~167 µs at the default clock. For high-throughput use cases, keep the TRNG powered up and use `MXC_TRNG_RandomAsync()` to overlap generation with other computation.
+</Note>

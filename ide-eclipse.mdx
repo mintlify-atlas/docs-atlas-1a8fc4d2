@@ -1,0 +1,159 @@
+---
+title: "Eclipse IDE"
+description: "Set up and use the Eclipse IDE for embedded development with the Analog Devices MSDK."
+---
+
+Eclipse CDT is supported out of the box with the MSDK. The MSDK includes a pre-configured Eclipse installation with the toolchain correctly wired up.
+
+## Setup
+
+The only setup required is to ensure the **Eclipse** component was selected during the [MSDK installation](/installation). If the MSDK is already installed without Eclipse, you can add it using the [Maintenance Tool](/installation#maintenance).
+
+## Running Eclipse
+
+<Warning>
+  Eclipse **must** be launched using the **Eclipse MaximSDK** shortcut. Launching Eclipse directly from its own folder will not configure the environment correctly and the toolchain will not be found.
+</Warning>
+
+The shortcut points to `Tools/Eclipse/cdt/eclipse` (`.bat` on Windows, `.sh` on Linux/macOS), which sets up Eclipse's system environment for use with the MSDK toolchain.
+
+When Eclipse opens, it prompts for a **workspace** location. This is a local folder where Eclipse will copy and manage your projects.
+
+## Creating a new project
+
+<Steps>
+  <Step title="Launch Eclipse">
+    Open Eclipse using the **Eclipse MaximSDK** shortcut.
+  </Step>
+  <Step title="Switch to the C/C++ perspective">
+    Confirm that Eclipse is set to the **C/C++ perspective** in the top-right corner. The new project wizard will not appear if a different perspective is active.
+  </Step>
+  <Step title="Open the new project wizard">
+    Navigate to **File → New → Maxim Microcontrollers**.
+  </Step>
+  <Step title="Enter the project name">
+    Enter a name for the project and click **Next**.
+  </Step>
+  <Step title="Configure the project">
+    Follow the new project wizard and set the following options:
+
+    | Option | Description |
+    |---|---|
+    | **Chip type** | The target microcontroller |
+    | **Board type** | The [Board Support Package (BSP)](/board-support-packages) for your evaluation platform |
+    | **Example type** | The example project to use as the template |
+    | **Adapter type** | The debug adapter to use |
+  </Step>
+  <Step title="Finish">
+    Click **Finish** to create the new project.
+  </Step>
+</Steps>
+
+## Importing examples
+
+<Steps>
+  <Step title="Launch Eclipse">
+    Open Eclipse using the **Eclipse MaximSDK** shortcut.
+  </Step>
+  <Step title="Open the import wizard">
+    Navigate to **File → Import**.
+  </Step>
+  <Step title="Select the import type">
+    Choose **General → Existing Projects into Workspace** and click **Next**.
+  </Step>
+  <Step title="Browse for example projects">
+    Click **Browse** and navigate to the `Examples` folder inside the MSDK installation. Select the example project(s) for your target microcontroller.
+  </Step>
+  <Step title="Enable copy into workspace">
+    Ensure **Copy projects into workspace** is checked. This copies the projects out of the MSDK and leaves the originals unmodified.
+  </Step>
+  <Step title="Finish">
+    Click **Finish** to import the selected project(s). The imported projects will appear in the **Project Explorer**.
+  </Step>
+</Steps>
+
+## How to set the BSP
+
+Imported Eclipse projects are configured for an **EVKIT**-type BSP by default. To change the BSP for a project:
+
+<Steps>
+  <Step title="Open project properties">
+    Right-click the project name in the Project Explorer and select **Properties**. Navigate to **C/C++ Build → Environment**.
+  </Step>
+  <Step title="Set the BOARD variable">
+    Locate the **`BOARD`** variable and set its value to match your target evaluation platform.
+
+    See the [Board Support Packages](/board-support-packages) documentation for a table of valid values.
+  </Step>
+  <Step title="Clean and rebuild">
+    Click **OK** to apply the change, then **clean** and rebuild the project to apply the new BSP.
+  </Step>
+</Steps>
+
+## Building a project
+
+<Steps>
+  <Step title="Switch to the C/C++ perspective">
+    Confirm that Eclipse is in the **C/C++ perspective** (top-right corner).
+  </Step>
+  <Step title="Select the project">
+    Select the correct project in the **Launch Configuration** dropdown.
+  </Step>
+  <Step title="Build">
+    Click the **Build** hammer button in the top-left toolbar to compile the project.
+  </Step>
+</Steps>
+
+## Flashing and debugging
+
+<Steps>
+  <Step title="Connect a debug adapter">
+    Connect a debug adapter between the host PC and the evaluation platform. Detailed hardware setup instructions are in the evaluation board's datasheet and Quick-Start Guide, available on its [analog.com](https://analog.com) product page.
+  </Step>
+  <Step title="Select the project in Debug mode">
+    Ensure the correct project is selected in the **Launch Configuration** dropdown and that it is set to **Debug** mode.
+  </Step>
+  <Step title="Start the debugger">
+    Click the **Debug** button in the top-left toolbar. Eclipse will flash the program binary and connect the debugger.
+  </Step>
+  <Step title="Verify entry into main">
+    Eclipse will switch to the debug perspective. The debugger will break on entry into `main`.
+  </Step>
+  <Step title="Run the program">
+    Press **Resume** (`F8`) using the top control bar and exercise the debugger as needed.
+  </Step>
+  <Step title="Stop the debugger">
+    Press **Terminate** (`Ctrl+F2`) when finished.
+  </Step>
+</Steps>
+
+## Segger J-Link setup
+
+Eclipse includes built-in support for Segger J-Link debuggers. Follow these steps to enable J-Link debugging:
+
+<Steps>
+  <Step title="Install J-Link software">
+    Download and install the latest **Segger J-Link Software and Documentation** from [segger.com/downloads/jlink](https://www.segger.com/downloads/jlink/).
+  </Step>
+  <Step title="Configure the Eclipse J-Link plugin">
+    Follow the [Segger J-Link Eclipse plugin instructions](https://eclipse-embed-cdt.github.io/debug/jlink/) with the following MSDK-specific modifications. Other options can be left at their defaults.
+
+    **GDB Client Setup — Executable name:**
+
+    Change the executable name to:
+
+    ```
+    arm-none-eabi-gdb${cross_suffix}
+    ```
+
+    **Startup options:**
+
+    - Under **Initialization commands**, add:
+
+      ```
+      monitor reset halt
+      ```
+
+    - Uncheck **Pre-run/Restart reset**.
+  </Step>
+</Steps>

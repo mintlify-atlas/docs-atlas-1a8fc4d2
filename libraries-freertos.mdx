@@ -1,0 +1,64 @@
+---
+title: "FreeRTOS"
+description: "Real-time operating system support for all MSDK parts. Configurable heap management, FreeRTOS-Plus-CLI support, and a ready-to-run FreeRTOSDemo example."
+---
+
+[FreeRTOS](https://www.freertos.org/index.html) is a Real-Time Operating System (RTOS) that provides multi-tasking abstractions and an OS layer specifically designed for embedded systems with real-time requirements. The MSDK maintains an official support layer for the FreeRTOS kernel.
+
+## Supported parts
+
+FreeRTOS is supported by all parts in the MSDK.
+
+## Enabling FreeRTOS
+
+Add the following line to your `project.mk` file:
+
+```makefile
+# project.mk
+
+LIB_FREERTOS = 1
+```
+
+See the `FreeRTOSDemo` example application in the `Examples/` directory of your MSDK installation for a complete working project.
+
+## Build variables
+
+| Variable | Description |
+|---|---|
+| `FREERTOS_HEAP_TYPE` | Selects the FreeRTOS heap management algorithm. Accepted values are `1`, `2`, `3`, `4`, or `5`. Defaults to `4` (heap_4). See the [FreeRTOS MemMang documentation](https://www.freertos.org/a00111.html) for details on each scheme. |
+
+### Choosing a heap type
+
+FreeRTOS offers five heap management schemes. The default, heap_4, is a good general-purpose choice:
+
+| Value | Scheme | Characteristics |
+|---|---|---|
+| `1` | heap_1 | Simplest. No freeing of memory. |
+| `2` | heap_2 | Allows freeing but does not coallesce adjacent free blocks. |
+| `3` | heap_3 | Wraps standard `malloc` / `free`. Thread-safe. |
+| `4` | heap_4 (default) | Coallesces adjacent free blocks. Reduces fragmentation. |
+| `5` | heap_5 | Like heap_4, but can span multiple non-adjacent memory regions. |
+
+```makefile
+# project.mk
+
+LIB_FREERTOS     = 1
+FREERTOS_HEAP_TYPE = 5
+```
+
+## FreeRTOS-Plus
+
+[FreeRTOS-Plus](https://www.freertos.org/FreeRTOS-Plus/index.html) provides addon functionality for the FreeRTOS kernel. The MSDK maintains support for some, but not all, available addons.
+
+| Addon | Status |
+|---|---|
+| [FreeRTOS-Plus-CLI](https://www.freertos.org/FreeRTOS-Plus/index.html) | Supported |
+| [FreeRTOS-Plus-TCP](https://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/index.html) | Not supported (contributions welcome) |
+
+<Note>
+FreeRTOS-Plus-CLI is included automatically when `LIB_FREERTOS = 1` is set. No additional variable is required to enable it.
+</Note>
+
+## Further reading
+
+Official FreeRTOS documentation is available at [freertos.org](https://www.freertos.org/index.html).

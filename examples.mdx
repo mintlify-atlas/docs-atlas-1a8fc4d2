@@ -1,0 +1,156 @@
+---
+title: 'Example projects'
+description: 'Browse and run the MSDK example projects for each supported microcontroller.'
+---
+
+The MSDK includes example projects for each supported microcontroller. They demonstrate how to use the [peripheral driver APIs](/libraries-peripheral-drivers) and other supported libraries. Examples are located in the `Examples/<TARGET>/` folder of your MSDK installation.
+
+<Warning>
+  Copy example projects to a folder **outside** the MSDK installation before modifying them. This keeps the original copy intact for reference. The destination folder must not have any spaces in its filepath.
+</Warning>
+
+Each example contains a `README.md` describing what it does. In general, there is at least one example per peripheral block, and the example name matches the peripheral it demonstrates (for example, `DMA`, `ADC`, `SPI`).
+
+## Available examples
+
+The following examples are available for the MAX78000. Other supported targets have a similar set.
+
+<AccordionGroup>
+  <Accordion title="General peripherals">
+
+    | Example | Description |
+    |---------|-------------|
+    | `ADC` | Analog-to-digital converter |
+    | `AES` | AES encryption/decryption |
+    | `CRC` | Cyclic redundancy check |
+    | `DMA` | Direct memory access |
+    | `ECC` | Error correction code |
+    | `GPIO` | General-purpose I/O |
+    | `Hello_World` | Basic LED and UART output |
+    | `Hello_World_Cpp` | Hello World in C++ |
+    | `I2C` / `I2C_MNGR` / `I2C_SCAN` / `I2C_Sensor` / `FTHR_I2C` | I2C communication |
+    | `I2S` / `I2S_DMA` / `I2S_DMA_Target` | I2S audio interface |
+    | `ICC` | Instruction cache controller |
+    | `LP` / `LPCMP` | Low-power modes and comparator |
+    | `Pulse_Train` | Pulse train generator |
+    | `RTC` / `RTC_Backup` | Real-time clock |
+    | `SPI` | SPI communication |
+    | `TMR` | Timer |
+    | `TRNG` | True random number generator |
+    | `UART` / `UART_DMA` | UART communication |
+    | `Watchdog` | Watchdog timer |
+    | `WUT` | Wake-up timer |
+
+  </Accordion>
+  <Accordion title="Storage & file systems">
+
+    | Example | Description |
+    |---------|-------------|
+    | `Flash` / `Flash_CLI` | Internal flash read/write |
+    | `EEPROM_Emulator` | EEPROM emulation in flash |
+    | `SDHC_FTHR` | SD card over SDHC interface |
+    | `WearLeveling` | Flash wear leveling |
+    | `FTHR_SRAM` | External SRAM |
+
+  </Accordion>
+  <Accordion title="Camera & display">
+
+    | Example | Description |
+    |---------|-------------|
+    | `CameraIF` / `CameraIF_Debayer` | Camera interface and raw Bayer capture |
+    | `ImgCapture` | Image capture utility |
+    | `TFT_Demo` | TFT display demo |
+
+  </Accordion>
+  <Accordion title="Libraries & RTOS">
+
+    | Example | Description |
+    |---------|-------------|
+    | `FreeRTOSDemo` | FreeRTOS task scheduling |
+    | `ARM-DSP` | CMSIS-DSP math and signal processing |
+    | `UCL` | Unified Crypto Library |
+    | `Library_Generate` / `Library_Use` | Static library build workflow |
+    | `Coremark` | CoreMark benchmark |
+    | `Temp_Monitor` | Temperature monitor application |
+
+  </Accordion>
+  <Accordion title="CNN (MAX78000 / MAX78002 only)">
+
+    The `CNN/` folder contains convolutional neural network inference examples built with the [Maxim Model Compiler](https://github.com/analogdevicesinc/ai8x-synthesis). These examples demonstrate on-device AI inference at ultra-low power.
+
+    See `Examples/MAX78000/CNN/` or `Examples/MAX78002/CNN/` for the full list of available CNN demo projects.
+
+  </Accordion>
+</AccordionGroup>
+
+## Open an example
+
+<Tabs>
+  <Tab title="VS Code">
+
+    <Steps>
+      <Step title="Copy the example">
+        Copy the example folder to a location outside the MSDK installation. The path must not contain spaces.
+      </Step>
+      <Step title="Open the folder">
+        In VS Code, select **File > Open Folder** and navigate to the copied example folder.
+      </Step>
+      <Step title="Build and run">
+        Use the VS Code build tasks to compile and flash the project. See the [VS Code IDE guide](/ide-vscode) for details.
+      </Step>
+    </Steps>
+
+  </Tab>
+  <Tab title="Eclipse">
+
+    <Steps>
+      <Step title="Copy the example">
+        Copy the example folder to a location outside the MSDK installation. The path must not contain spaces.
+      </Step>
+      <Step title="Import the project">
+        In Eclipse, select **File > Import > General > Existing Projects into Workspace**.
+      </Step>
+      <Step title="Select the folder">
+        Set the root directory to the copied example folder and click **Finish**.
+      </Step>
+      <Step title="Build and run">
+        Build the project using the Eclipse build tools. See the [Eclipse IDE guide](/ide-eclipse) for details.
+      </Step>
+    </Steps>
+
+  </Tab>
+  <Tab title="Command line">
+
+    <Steps>
+      <Step title="Copy the example">
+        Copy the example folder to a location outside the MSDK installation. The path must not contain spaces.
+      </Step>
+      <Step title="Navigate to the folder">
+
+        ```bash
+        cd /path/to/copied/example
+        ```
+
+      </Step>
+      <Step title="Build the project">
+
+        ```bash
+        make
+        ```
+
+      </Step>
+      <Step title="Flash the binary">
+
+        ```bash
+        make flash
+        ```
+
+      </Step>
+    </Steps>
+
+  </Tab>
+</Tabs>
+
+<Tip>
+  Always work from a copy of the example outside the MSDK folder. This lets you freely modify the project while keeping the original intact for reference.
+</Tip>

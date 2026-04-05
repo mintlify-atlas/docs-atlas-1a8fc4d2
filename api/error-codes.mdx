@@ -1,0 +1,88 @@
+---
+title: "Error codes"
+description: "All MXC error return codes used by the Peripheral Driver API, with values and descriptions."
+---
+
+The Peripheral Driver API uses a **negative-error convention**: every function that can fail returns an `int`. A return value of `0` means success; any negative value indicates a specific error condition. This convention avoids conflict with positive non-error return values that some functions use (for example, a byte count or a hardware status field).
+
+Error codes are defined in `mxc_errors.h` and included automatically via `mxc.h`.
+
+```c
+#include "mxc.h"
+```
+
+## Error code table
+
+| Error code        | Value | Description                                          |
+| ----------------- | -----:| ---------------------------------------------------- |
+| `E_NO_ERROR`      | 0     | No error. Operation completed successfully.          |
+| `E_SUCCESS`       | 0     | Alias for `E_NO_ERROR`.                              |
+| `E_NULL_PTR`      | -1    | A pointer argument is `NULL`.                        |
+| `E_NO_DEVICE`     | -2    | No such device exists or device is not present.      |
+| `E_BAD_PARAM`     | -3    | A parameter value is not acceptable.                 |
+| `E_INVALID`       | -4    | A value is not valid or not allowed.                 |
+| `E_UNINITIALIZED` | -5    | The module or peripheral has not been initialized.   |
+| `E_BUSY`          | -6    | Resource is busy; try again later.                   |
+| `E_BAD_STATE`     | -7    | Operation is not allowed in the current state.       |
+| `E_UNKNOWN`       | -8    | Generic, unclassified error.                         |
+| `E_COMM_ERR`      | -9    | General communications error.                        |
+| `E_TIME_OUT`      | -10   | Operation timed out before completing.               |
+| `E_NO_RESPONSE`   | -11   | Expected response did not occur.                     |
+| `E_OVERFLOW`      | -12   | Operation resulted in unexpected overflow.           |
+| `E_UNDERFLOW`     | -13   | Operation resulted in unexpected underflow.          |
+| `E_NONE_AVAIL`    | -14   | Data or resource is not available at this time.      |
+| `E_SHUTDOWN`      | -15   | Event or operation was shut down.                    |
+| `E_ABORT`         | -16   | Event or operation was aborted.                      |
+| `E_NOT_SUPPORTED` | -17   | The requested operation is not supported.            |
+| `E_FAIL`          | -255  | General operation failure.                           |
+
+<Note>
+  The values `E_NO_ERROR` and `E_SUCCESS` are identical (`0`). Use whichever is most readable in context — `E_NO_ERROR` is common in comparison expressions, while `E_SUCCESS` reads naturally in success-path comments.
+</Note>
+
+## Checking for errors
+
+Compare the return value of any API call against `E_NO_ERROR` (or check that it is negative) to detect failures. A common pattern:
+
+```c
+#include "mxc.h"
+#include <stdio.h>
+
+int err;
+
+/* Initialize UART0 at 115200 baud */
+err = MXC_UART_Init(MXC_UART0, 115200, MXC_UART_IBRO_CLK);
+if (err != E_NO_ERROR) {
+    printf("UART init failed: %d\n", err);
+    /* handle error */
+}
+```
+
+For functions that return a positive value on success (such as a byte count), check for negative values instead:
+
+```c
+int bytes_read;
+
+bytes_read = MXC_UART_ReadCharacterRaw(MXC_UART0);
+if (bytes_read < 0) {
+    /* bytes_read holds the negative error code */
+    printf("Read error: %d\n", bytes_read);
+}
+```
+
+<Warning>
+  Do not compare return values with `== E_SUCCESS` when the function may return a positive non-error value. Always check `!= E_NO_ERROR` or `< 0` for those cases.
+</Warning>
+
+## Common error scenarios
+
+| Scenario | Typical error code |
+| -------- | ------------------ |
+| Passing a `NULL` pointer for a required config struct | `E_NULL_PTR` |
+| Requesting a baud rate the hardware cannot achieve | `E_BAD_PARAM` |
+| Calling a function before `MXC_<PERIPH>_Init()` | `E_UNINITIALIZED` |
+| Starting a DMA transfer while one is already running | `E_BUSY` |
+| Attempting a low-power transition with an active peripheral | `E_BAD_STATE` |
+| Waiting for an ACK that never arrives (I2C, SPI) | `E_COMM_ERR` or `E_TIME_OUT` |
+| Writing beyond the end of a FIFO or buffer | `E_OVERFLOW` |
+| Using a feature not present on this part number | `E_NOT_SUPPORTED` |

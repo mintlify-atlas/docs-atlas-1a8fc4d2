@@ -1,23 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "Analog Devices MSDK",
+  "projectType": "sdk-library",
+  "projectName": "Analog Devices MSDK",
+  "projectDescription": "A comprehensive software development kit providing peripheral drivers, toolchain support, Board Support Packages, and example firmware for Analog Devices MAX32xxx and MAX78xxx microcontrollers.",
   "theme": "aspen",
-  "colors": {
-    "primary": "#076fbc",
-    "light": "#78b4dc"
-  },
-  "favicon": "https://media.brand.dev/88d9dc1b-d72c-444c-94e6-287ae8a64865.png",
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/analogdevicesinc/msdk"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/analogdevicesinc/msdk"
-    }
-  },
+  "primaryColor": "#076fbc",
+  "lightColor": "#78b4dc",
+  "darkColor": null,
   "navigation": {
     "tabs": [
       {
@@ -112,5 +100,36 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Peripheral Driver API (C) for GPIO, UART, SPI, I2C, I2S, ADC, DMA, RTC, WDT, TRNG, and more",
+    "Board Support Packages (BSPs) for official Analog Devices evaluation kits",
+    "GCC-based toolchain with GNU Make build system",
+    "Visual Studio Code, Eclipse, Keil MDK, and IAR Embedded Workbench IDE support",
+    "Cordio Bluetooth Low Energy (BLE) stack for BLE-enabled MCUs",
+    "FreeRTOS real-time OS support for all parts",
+    "USB support via MAXUSB and TinyUSB libraries",
+    "SDHC/FatFS library for SD card file system support",
+    "CMSIS-DSP library for hardware-accelerated signal processing",
+    "MAX78000/MAX78002 AI/CNN accelerator support",
+    "OpenOCD-based flash and debug integration",
+    "50+ example projects per supported microcontroller"
+  ],
+  "publicApiSurface": [
+    "MXC_GPIO_Config / MXC_GPIO_OutSet / MXC_GPIO_InGet",
+    "MXC_UART_Init / MXC_UART_Write / MXC_UART_Read",
+    "MXC_SPI_Init / MXC_SPI_MasterTransaction",
+    "MXC_I2C_Init / MXC_I2C_MasterWrite / MXC_I2C_MasterRead",
+    "MXC_ADC_Init / MXC_ADC_StartConversion / MXC_ADC_GetData",
+    "MXC_DMA_Init / MXC_DMA_AcquireChannel / MXC_DMA_Start",
+    "MXC_RTC_Init / MXC_RTC_Start / MXC_RTC_GetTime",
+    "MXC_TMR_Init / MXC_TMR_Start / MXC_TMR_Stop",
+    "MXC_WDT_Init / MXC_WDT_Enable / MXC_WDT_Feed",
+    "MXC_TRNG_Init / MXC_TRNG_Random",
+    "MXC_LP_EnterSleepMode / MXC_LP_EnterDeepSleepMode",
+    "MXC_ICC_Enable / MXC_ICC_Disable",
+    "Board_Init (BSP weak function override)",
+    "SystemInit / PreInit (startup weak function overrides)",
+    "build variables: TARGET, BOARD, MAXIM_PATH, MFLOAT_ABI, LIB_FREERTOS, LIB_CORDIO, LIB_MAXUSB, LIB_SDHC"
+  ]
 }

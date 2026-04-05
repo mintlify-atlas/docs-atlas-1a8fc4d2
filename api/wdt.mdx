@@ -1,0 +1,270 @@
+---
+title: "Watchdog Timer (WDT)"
+description: "Configure the MAX78000 watchdog timer to detect firmware lock-ups, generate a warning interrupt before reset, and use windowed mode to catch both late and early feeds."
+keywords: ["watchdog", "WDT", "reset", "windowed", "MAX78000", "MSDK"]
+---
+
+The MAX78000 includes a dedicated watchdog timer (WDT0) that resets the device if firmware stops servicing it within a programmed window. The WDT operates independently of the CPU — it continues running through Sleep mode — and supports two operating modes:
+
+- **Compatibility mode** — a simple upper-bound timeout. Failing to reset (feed) the watchdog before the timeout causes a reset.
+- **Windowed mode** — defines both a lower bound and an upper bound. Feeding the watchdog too early (before the lower bound) or too late (after the upper bound) both trigger a response, enabling detection of runaway fast loops as well as stalls.
+
+Each bound has a separate interrupt period and reset period. The interrupt fires first, giving firmware a chance to log an error before the reset occurs.
+
+---
+
+## Configuration structure
+
+```c
+typedef struct {
+    mxc_wdt_mode_t   mode;              ///< WDT mode
+    mxc_wdt_period_t upperResetPeriod;  ///< Reset upper limit
+    mxc_wdt_period_t lowerResetPeriod;  ///< Reset lower limit
+    mxc_wdt_period_t upperIntPeriod;    ///< Interrupt upper limit
+    mxc_wdt_period_t lowerIntPeriod;    ///< Interrupt lower limit
+} mxc_wdt_cfg_t;
+```
+
+### `mxc_wdt_mode_t`
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `MXC_WDT_COMPATIBILITY` | 0 | Upper-bound only (classic watchdog) |
+| `MXC_WDT_WINDOWED` | 1 | Upper and lower bounds enforced |
+
+### `mxc_wdt_period_t` — timeout periods
+
+Periods are expressed as powers of two of the WDT clock cycles:
+
+| Constant | Period |
+|----------|--------|
+| `MXC_WDT_PERIOD_2_31` | 2³¹ clock cycles |
+| `MXC_WDT_PERIOD_2_30` | 2³⁰ clock cycles |
+| … | … |
+| `MXC_WDT_PERIOD_2_16` | 2¹⁶ clock cycles |
+
+### `mxc_wdt_clock_t` — clock source
+
+| Constant | Source |
+|----------|--------|
+| `MXC_WDT_PCLK` | PCLK (peripheral clock) |
+| `MXC_WDT_IBRO_CLK` | IBRO (7.3728 MHz) |
+| `MXC_WDT_INRO_CLK` | INRO (8–30 kHz) |
+| `MXC_WDT_ERTCO_CLK` | ERTCO (32.768 kHz) |
+
+---
+
+## Initialization and shutdown
+
+### `MXC_WDT_Init`
+
+```c
+int MXC_WDT_Init(mxc_wdt_regs_t *wdt, mxc_wdt_cfg_t *cfg);
+```
+
+Initializes the watchdog timer with the settings in `*cfg` and enables the peripheral clock. The watchdog is **not** started by this call; follow with `MXC_WDT_Enable`.
+
+**Parameters**
+
+| Name | Description |
+|------|-------------|
+| `wdt` | Pointer to watchdog registers — use `MXC_WDT0` |
+| `cfg` | Pointer to a populated `mxc_wdt_cfg_t` |
+
+**Returns** `E_NO_ERROR` on success, or a negative error code.
+
+<Note>
+To suppress automatic clock management, define `MSDK_NO_GPIO_CLK_INIT` in `project.mk`.
+</Note>
+
+---
+
+### `MXC_WDT_Shutdown`
+
+```c
+int MXC_WDT_Shutdown(mxc_wdt_regs_t *wdt);
+```
+
+Disables the watchdog peripheral clock. Returns `E_NO_ERROR` on success.
+
+---
+
+## Enable and disable
+
+### `MXC_WDT_Enable` / `MXC_WDT_Disable`
+
+```c
+void MXC_WDT_Enable(mxc_wdt_regs_t *wdt);
+void MXC_WDT_Disable(mxc_wdt_regs_t *wdt);
+```
+
+Start or stop the watchdog counter. Disable the WDT before changing period settings, then re-enable it afterward.
+
+<Warning>
+Once `MXC_WDT_Enable` is called the watchdog is active. If `MXC_WDT_ResetTimer` is not called within the configured window the device will reset. Ensure your feed loop is in place before enabling.
+</Warning>
+
+---
+
+## Period configuration
+
+### `MXC_WDT_SetResetPeriod`
+
+```c
+void MXC_WDT_SetResetPeriod(mxc_wdt_regs_t *wdt, mxc_wdt_cfg_t *cfg);
+```
+
+Applies `cfg->upperResetPeriod` and `cfg->lowerResetPeriod` to the watchdog reset registers. In compatibility mode only `upperResetPeriod` is used.
+
+---
+
+### `MXC_WDT_SetIntPeriod`
+
+```c
+void MXC_WDT_SetIntPeriod(mxc_wdt_regs_t *wdt, mxc_wdt_cfg_t *cfg);
+```
+
+Applies `cfg->upperIntPeriod` and `cfg->lowerIntPeriod`. The interrupt fires before the reset, giving firmware an opportunity to react. Set the interrupt period shorter than the reset period to create a warning window.
+
+---
+
+## Feeding the watchdog
+
+### `MXC_WDT_ResetTimer`
+
+```c
+void MXC_WDT_ResetTimer(mxc_wdt_regs_t *wdt);
+```
+
+Resets (feeds / pets) the watchdog counter back to zero. In windowed mode, call this only after the lower-bound period has elapsed but before the upper-bound period expires.
+
+---
+
+## Reset vs. interrupt-only mode
+
+The WDT can be configured to assert an interrupt without triggering a hardware reset, or to generate both. Use the following functions to control this independently:
+
+### `MXC_WDT_EnableReset` / `MXC_WDT_DisableReset`
+
+```c
+void MXC_WDT_EnableReset(mxc_wdt_regs_t *wdt);
+void MXC_WDT_DisableReset(mxc_wdt_regs_t *wdt);
+```
+
+Enable or disable the hardware reset on timeout. Disabling reset keeps the WDT as an interrupt-only watchdog — useful during development or for soft recovery logic.
+
+---
+
+### `MXC_WDT_EnableInt` / `MXC_WDT_DisableInt`
+
+```c
+void MXC_WDT_EnableInt(mxc_wdt_regs_t *wdt);
+void MXC_WDT_DisableInt(mxc_wdt_regs_t *wdt);
+```
+
+Enable or disable the watchdog interrupt. When enabled, the interrupt fires at the configured interrupt period, before the reset period is reached.
+
+---
+
+## Status and flags
+
+### `MXC_WDT_GetResetFlag` / `MXC_WDT_ClearResetFlag`
+
+```c
+int  MXC_WDT_GetResetFlag(mxc_wdt_regs_t *wdt);
+void MXC_WDT_ClearResetFlag(mxc_wdt_regs_t *wdt);
+```
+
+Check whether the previous device reset was caused by the watchdog. Returns `1` if the WDT caused the last reset. Check this at startup to distinguish a watchdog recovery from a normal power-on, then clear the flag.
+
+Reset flag values:
+
+| Value | Meaning |
+|-------|---------|
+| `MXC_F_WDT_CTRL_RST_LATE` | Reset occurred because feed was too late (overflow) |
+| `MXC_F_WDT_CTRL_RST_EARLY` | Reset occurred because feed was too early (underflow, windowed mode) |
+
+---
+
+### `MXC_WDT_GetIntFlag` / `MXC_WDT_ClearIntFlag`
+
+```c
+int  MXC_WDT_GetIntFlag(mxc_wdt_regs_t *wdt);
+void MXC_WDT_ClearIntFlag(mxc_wdt_regs_t *wdt);
+```
+
+Read or clear the WDT interrupt flag. Clear the flag inside the ISR (`WDT0_IRQHandler`) to prevent immediate re-entry.
+
+---
+
+## Clock source selection
+
+```c
+int MXC_WDT_SetClockSource(mxc_wdt_regs_t *wdt, mxc_wdt_clock_t clock_source);
+```
+
+Changes the clock source feeding the watchdog counter. Call this before `MXC_WDT_Enable`. Returns `E_NO_ERROR` on success.
+
+---
+
+## Code example
+
+```c
+#include "wdt.h"
+#include "nvic_table.h"
+
+static mxc_wdt_cfg_t wdt_cfg;
+
+void WDT0_IRQHandler(void)
+{
+    MXC_WDT_ClearIntFlag(MXC_WDT0);
+    /* Log the event or attempt a controlled recovery before reset fires */
+}
+
+void watchdog_setup(void)
+{
+    /* Use windowed mode: feed must arrive between 2^24 and 2^28 clock cycles */
+    wdt_cfg.mode             = MXC_WDT_WINDOWED;
+    wdt_cfg.lowerResetPeriod = MXC_WDT_PERIOD_2_24;
+    wdt_cfg.upperResetPeriod = MXC_WDT_PERIOD_2_28;
+    wdt_cfg.lowerIntPeriod   = MXC_WDT_PERIOD_2_23;
+    wdt_cfg.upperIntPeriod   = MXC_WDT_PERIOD_2_27;
+
+    MXC_WDT_Init(MXC_WDT0, &wdt_cfg);
+
+    /* Detect watchdog-caused reset from previous session */
+    if (MXC_WDT_GetResetFlag(MXC_WDT0)) {
+        MXC_WDT_ClearResetFlag(MXC_WDT0);
+        MXC_WDT_ClearIntFlag(MXC_WDT0);
+        /* Handle recovery ... */
+    }
+
+    MXC_WDT_Disable(MXC_WDT0);
+    MXC_WDT_SetResetPeriod(MXC_WDT0, &wdt_cfg);
+    MXC_WDT_SetIntPeriod(MXC_WDT0, &wdt_cfg);
+    MXC_WDT_ResetTimer(MXC_WDT0);   /* Clear counter before enabling */
+    MXC_WDT_EnableReset(MXC_WDT0);
+    MXC_WDT_EnableInt(MXC_WDT0);
+
+    MXC_NVIC_SetVector(WDT0_IRQn, WDT0_IRQHandler);
+    NVIC_EnableIRQ(WDT0_IRQn);
+
+    MXC_WDT_Enable(MXC_WDT0);
+}
+
+int main(void)
+{
+    watchdog_setup();
+
+    while (1) {
+        /* Application work */
+
+        /* Feed the watchdog within the valid window */
+        MXC_WDT_ResetTimer(MXC_WDT0);
+    }
+}
+```
+
+<Tip>
+In windowed mode, set your feed point roughly in the middle of the valid window — after `lowerResetPeriod` cycles but well before `upperResetPeriod`. This gives the largest margin on both sides.
+</Tip>

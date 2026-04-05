@@ -1,0 +1,352 @@
+---
+title: "SPI"
+description: "API reference for the Serial Peripheral Interface (SPI) driver in the Analog Devices MSDK."
+---
+
+## Overview
+
+The SPI peripheral driver supports full-duplex and half-duplex transfers in master and slave modes, with configurable clock polarity and phase (modes 0–3), data widths from 2 to 16 bits, and bus widths of standard (MISO/MOSI), dual (2-wire), or quad (4-wire). Three transfer modes are available: blocking, interrupt-driven (async), and DMA.
+
+Each SPI instance is selected by passing a pointer to its register block (`MXC_SPI0`, `MXC_SPI1`, etc.) to every API function.
+
+<Note>
+The MSDK includes two SPI driver implementations: **SPI v1** (default) and **SPI v2**. The version is selected at build time via the `MXC_SPI_VERSION` variable in your project's `project.mk`. SPI v2 introduces an updated initialization API and additional configuration options. The functions documented here reflect SPI v1, which ships in the default MSDK build for MAX78000.
+</Note>
+
+---
+
+## Data structures
+
+### `mxc_spi_req_t`
+
+Describes a complete SPI transaction. Used by all master and slave transaction functions.
+
+```c
+typedef struct _mxc_spi_req_t mxc_spi_req_t;
+
+struct _mxc_spi_req_t {
+    mxc_spi_regs_t *spi;       // Pointer to SPI registers (selects SPI block)
+    int             ssIdx;     // Slave select line index (master mode only)
+    int             ssDeassert;// 1 = deassert SS at end of transaction; 0 = leave asserted
+    uint8_t        *txData;    // Buffer containing transmit data
+    uint8_t        *rxData;    // Buffer to store received data
+    uint32_t        txLen;     // Number of bytes to transmit
+    uint32_t        rxLen;     // Number of bytes to receive
+    uint32_t        txCnt;     // Bytes actually transmitted (updated by driver)
+    uint32_t        rxCnt;     // Bytes actually received (updated by driver)
+    spi_complete_cb_t completeCB; // Completion callback (async/DMA only)
+};
+```
+
+### `mxc_spi_pins_t`
+
+Controls which SPI pins are initialized during `MXC_SPI_Init`. Set a field to `true` to configure the corresponding pin for SPI use.
+
+```c
+struct _mxc_spi_pins_t {
+    bool clock;   // Clock (SCK) pin
+    bool ss0;     // Slave select 0
+    bool ss1;     // Slave select 1
+    bool ss2;     // Slave select 2
+    bool miso;    // MISO pin
+    bool mosi;    // MOSI pin
+    bool sdio2;   // SDIO2 (quad mode)
+    bool sdio3;   // SDIO3 (quad mode)
+    bool vddioh;  // VDDIOH voltage domain select
+};
+```
+
+### `mxc_spi_mode_t`
+
+SPI clock polarity and phase combinations.
+
+```c
+typedef enum {
+    SPI_MODE_0,  // CPOL=0, CPHA=0 — clock idle low, sample on rising edge
+    SPI_MODE_1,  // CPOL=0, CPHA=1 — clock idle low, sample on falling edge
+    SPI_MODE_2,  // CPOL=1, CPHA=0 — clock idle high, sample on falling edge
+    SPI_MODE_3,  // CPOL=1, CPHA=1 — clock idle high, sample on rising edge
+} mxc_spi_mode_t;
+```
+
+### `mxc_spi_width_t`
+
+SPI bus width for a transaction.
+
+```c
+typedef enum {
+    SPI_WIDTH_3WIRE,    // 1 data line, half duplex
+    SPI_WIDTH_STANDARD, // MISO + MOSI, full duplex
+    SPI_WIDTH_DUAL,     // 2 data lines, half duplex
+    SPI_WIDTH_QUAD,     // 4 data lines, half duplex
+} mxc_spi_width_t;
+```
+
+---
+
+## Function reference
+
+### Initialization and shutdown
+
+#### `MXC_SPI_Init`
+
+Initialize and enable a SPI peripheral. Defaults to SPI mode 0 and `SPI_WIDTH_STANDARD`.
+
+```c
+int MXC_SPI_Init(mxc_spi_regs_t *spi, int masterMode, int quadModeUsed,
+                 int numSlaves, unsigned ssPolarity, unsigned int hz,
+                 mxc_spi_pins_t pins);
+```
+
+| Parameter      | Description |
+|----------------|-------------|
+| `spi`          | Pointer to SPI registers (e.g., `MXC_SPI0`) |
+| `masterMode`   | Non-zero for master mode, zero for slave mode |
+| `quadModeUsed` | Non-zero to acquire SDIO2/SDIO3 pins for quad mode |
+| `numSlaves`    | Number of slaves (master mode); determines how many SS pins are acquired |
+| `ssPolarity`   | Bitmask of active polarity for each SS line (1 = active high) |
+| `hz`           | Requested clock frequency in Hz (master mode) |
+| `pins`         | Pin selection structure |
+
+Returns the actual clock frequency achieved if successful, or a negative error code.
+
+#### `MXC_SPI_Shutdown`
+
+Disable and shut down a SPI peripheral.
+
+```c
+int MXC_SPI_Shutdown(mxc_spi_regs_t *spi);
+```
+
+---
+
+### Frequency and data size
+
+#### `MXC_SPI_SetFrequency`
+
+Set the SPI clock frequency (master mode only).
+
+```c
+int MXC_SPI_SetFrequency(mxc_spi_regs_t *spi, unsigned int hz);
+```
+
+Returns the actual frequency set, or a negative error code.
+
+#### `MXC_SPI_GetFrequency`
+
+Get the current SPI clock frequency.
+
+```c
+unsigned int MXC_SPI_GetFrequency(mxc_spi_regs_t *spi);
+```
+
+#### `MXC_SPI_SetDataSize`
+
+Set the number of bits per SPI character (2–16 bits).
+
+```c
+int MXC_SPI_SetDataSize(mxc_spi_regs_t *spi, int dataSize);
+```
+
+<Warning>
+The hardware does not support 9-bit wide characters at high clock speeds on the MAX78000. Skip 9-bit configurations or reduce the clock rate if 9-bit framing is required.
+</Warning>
+
+#### `MXC_SPI_GetDataSize`
+
+Get the currently configured bits per character.
+
+```c
+int MXC_SPI_GetDataSize(mxc_spi_regs_t *spi);
+```
+
+---
+
+### Mode and width
+
+#### `MXC_SPI_SetMode`
+
+Set the SPI clock mode (polarity and phase).
+
+```c
+int MXC_SPI_SetMode(mxc_spi_regs_t *spi, mxc_spi_mode_t spiMode);
+```
+
+#### `MXC_SPI_GetMode`
+
+Get the current SPI clock mode.
+
+```c
+mxc_spi_mode_t MXC_SPI_GetMode(mxc_spi_regs_t *spi);
+```
+
+#### `MXC_SPI_SetWidth`
+
+Set the bus width for subsequent transactions.
+
+```c
+int MXC_SPI_SetWidth(mxc_spi_regs_t *spi, mxc_spi_width_t spiWidth);
+```
+
+---
+
+### Master transaction functions
+
+#### `MXC_SPI_MasterTransaction`
+
+Perform a blocking (synchronous) SPI master transaction.
+
+```c
+int MXC_SPI_MasterTransaction(mxc_spi_req_t *req);
+```
+
+In full-duplex mode, TX and RX occur simultaneously. In half-duplex mode, the driver transmits all TX data, then receives RX data. The SS line is managed automatically.
+
+#### `MXC_SPI_MasterTransactionAsync`
+
+Set up an interrupt-driven (non-blocking) master transaction.
+
+```c
+int MXC_SPI_MasterTransactionAsync(mxc_spi_req_t *req);
+```
+
+Call `MXC_SPI_AsyncHandler()` from the SPI ISR. The `completeCB` field in the request is called when the transaction finishes.
+
+#### `MXC_SPI_MasterTransactionDMA`
+
+Set up a DMA-driven master transaction.
+
+```c
+int MXC_SPI_MasterTransactionDMA(mxc_spi_req_t *req);
+```
+
+The driver acquires the lowest available DMA channels, loads/unloads the FIFOs via DMA, and releases the channels on completion.
+
+---
+
+### Slave transaction functions
+
+#### `MXC_SPI_SlaveTransaction`
+
+Perform a blocking SPI slave transaction. Waits for SS assertion from the master.
+
+```c
+int MXC_SPI_SlaveTransaction(mxc_spi_req_t *req);
+```
+
+#### `MXC_SPI_SlaveTransactionAsync`
+
+Set up an interrupt-driven slave transaction.
+
+```c
+int MXC_SPI_SlaveTransactionAsync(mxc_spi_req_t *req);
+```
+
+#### `MXC_SPI_SlaveTransactionDMA`
+
+Set up a DMA-driven slave transaction.
+
+```c
+int MXC_SPI_SlaveTransactionDMA(mxc_spi_req_t *req);
+```
+
+---
+
+### Async and DMA helpers
+
+#### `MXC_SPI_AsyncHandler`
+
+Service function for async transactions. Call from the SPI interrupt handler.
+
+```c
+void MXC_SPI_AsyncHandler(mxc_spi_regs_t *spi);
+```
+
+#### `MXC_SPI_AbortAsync`
+
+Abort any in-progress async transaction. The `completeCB` callback is executed with an error code.
+
+```c
+void MXC_SPI_AbortAsync(mxc_spi_regs_t *spi);
+```
+
+---
+
+## Example: master full-duplex transfer
+
+The following shows a blocking SPI master loopback transfer with standard (MISO/MOSI) width. This pattern is drawn from `Examples/MAX78000/SPI/main.c`.
+
+```c
+#include "spi.h"
+#include "mxc_device.h"
+
+#define SPI_SPEED  100000   // 100 kHz
+#define DATA_LEN   100
+
+uint16_t tx_data[DATA_LEN];
+uint16_t rx_data[DATA_LEN];
+
+int main(void)
+{
+    int error;
+    mxc_spi_pins_t spi_pins = {
+        .clock = true,
+        .miso  = true,
+        .mosi  = true,
+        .ss0   = true,
+        .ss1   = false,
+        .ss2   = false,
+        .sdio2 = false,
+        .sdio3 = false,
+    };
+
+    /* Initialize SPI0 as master, no quad mode, 1 slave, active-low SS */
+    error = MXC_SPI_Init(MXC_SPI0, 1, 0, 1, 0, SPI_SPEED, spi_pins);
+    if (error != E_NO_ERROR) { return error; }
+
+    /* Configure 16-bit characters, standard (full-duplex) width */
+    MXC_SPI_SetDataSize(MXC_SPI0, 16);
+    MXC_SPI_SetWidth(MXC_SPI0, SPI_WIDTH_STANDARD);
+
+    /* Fill TX buffer */
+    for (int i = 0; i < DATA_LEN; i++) { tx_data[i] = 0xA5A5; }
+
+    mxc_spi_req_t req = {
+        .spi        = MXC_SPI0,
+        .txData     = (uint8_t *)tx_data,
+        .rxData     = (uint8_t *)rx_data,
+        .txLen      = DATA_LEN,
+        .rxLen      = DATA_LEN,
+        .ssIdx      = 0,
+        .ssDeassert = 1,
+        .txCnt      = 0,
+        .rxCnt      = 0,
+        .completeCB = NULL,
+    };
+
+    /* Perform blocking transfer */
+    error = MXC_SPI_MasterTransaction(&req);
+
+    MXC_SPI_Shutdown(MXC_SPI0);
+    return error;
+}
+```
+
+<Tip>
+For SPI v2, set `MXC_SPI_VERSION=2` in your `project.mk`. The v2 `MXC_SPI_Init` signature differs — consult the v2 header at `Libraries/PeriphDrivers/Include/<PART>/spi.h` after switching.
+</Tip>
+
+---
+
+## Supported microcontrollers
+
+The SPI peripheral and this API are available on the following Analog Devices MAX-series parts (non-exhaustive):
+
+- MAX78000
+- MAX78002
+- MAX32690
+- MAX32670 / MAX32672
+- MAX32650 / MAX32655
+- MAX32665 / MAX32666
+
+Consult your part's data sheet for the number of SPI instances available and which instances support quad-mode operation.

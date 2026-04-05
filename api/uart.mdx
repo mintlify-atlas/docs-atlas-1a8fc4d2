@@ -1,0 +1,334 @@
+---
+title: "UART"
+description: "API reference for the Universal Asynchronous Receiver-Transmitter (UART) peripheral driver in the Analog Devices MSDK."
+---
+
+## Overview
+
+The UART peripheral driver provides a full-featured interface for asynchronous serial communication. It supports baud rates from low-speed to high-speed operation, configurable data framing (5–8 data bits, 1–2 stop bits, optional parity), hardware flow control, and three transfer modes: blocking, interrupt-driven (async), and DMA.
+
+Each UART instance is selected by passing a pointer to its register block (`MXC_UART0`, `MXC_UART1`, etc.) to every API function. After `MXC_UART_Init()`, the port is ready to use with 8-N-1 framing at the requested baud rate; framing parameters can be adjusted individually with the low-level functions described below.
+
+<Note>
+The MAX78000 includes four UART instances (UART0–UART3). UART3 is a low-power UART (LPUART) with a restricted clock source selection — see `mxc_uart_clock_t` for details.
+</Note>
+
+---
+
+## Data structures
+
+### `mxc_uart_req_t`
+
+Describes a complete UART transaction. Used by the blocking, async, and DMA transaction functions.
+
+```c
+typedef struct _mxc_uart_req_t mxc_uart_req_t;
+
+struct _mxc_uart_req_t {
+    mxc_uart_regs_t *uart;       // Pointer to UART registers (selects UART block)
+    const uint8_t   *txData;     // Buffer containing transmit data
+    uint8_t         *rxData;     // Buffer to store received data
+    uint32_t         txLen;      // Number of bytes to transmit from txData
+    uint32_t         rxLen;      // Number of bytes to receive into rxData
+    volatile uint32_t txCnt;    // Bytes actually transmitted (updated by driver)
+    volatile uint32_t rxCnt;    // Bytes actually received (updated by driver)
+    mxc_uart_complete_cb_t callback; // Called on completion (async/DMA only)
+};
+```
+
+<Note>
+For character sizes smaller than 8 bits, pad the MSB of each byte in `txData`/`rxData` with zeros. For character sizes larger than 8 bits, use two bytes per character and pad the MSB of the upper byte.
+</Note>
+
+### `mxc_uart_stop_t`
+
+```c
+typedef enum {
+    MXC_UART_STOP_1,  // 1 stop bit
+    MXC_UART_STOP_2,  // 2 stop bits (1.5 clocks for 5-bit characters)
+} mxc_uart_stop_t;
+```
+
+### `mxc_uart_parity_t`
+
+```c
+typedef enum {
+    MXC_UART_PARITY_DISABLE,  // Parity disabled
+    MXC_UART_PARITY_EVEN_0,   // Even parity, 0-based
+    MXC_UART_PARITY_EVEN_1,   // Even parity, 1-based
+    MXC_UART_PARITY_ODD_0,    // Odd parity, 0-based
+    MXC_UART_PARITY_ODD_1,    // Odd parity, 1-based
+} mxc_uart_parity_t;
+```
+
+### `mxc_uart_clock_t`
+
+```c
+typedef enum {
+    MXC_UART_APB_CLK   = 0,  // APB clock (all UARTs; 8 MHz source for UART3)
+    MXC_UART_IBRO_CLK  = 2,  // Internal baud-rate oscillator (UART0–2 only)
+    MXC_UART_ERTCO_CLK = 4,  // External RTC oscillator (UART3/LPUART only)
+} mxc_uart_clock_t;
+```
+
+---
+
+## Function reference
+
+### Initialization and shutdown
+
+#### `MXC_UART_Init`
+
+Initialize and enable a UART peripheral. Sets defaults of 8 data bits, 1 stop bit, no parity, and no flow control.
+
+```c
+int MXC_UART_Init(mxc_uart_regs_t *uart, unsigned int baud, mxc_uart_clock_t clock);
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `uart`    | Pointer to UART registers (e.g., `MXC_UART0`) |
+| `baud`    | Requested baud rate in Hz |
+| `clock`   | Clock source for the baud-rate generator |
+
+Returns `E_NO_ERROR` on success, or a negative error code.
+
+#### `MXC_UART_Shutdown`
+
+Disable and shut down a UART peripheral.
+
+```c
+int MXC_UART_Shutdown(mxc_uart_regs_t *uart);
+```
+
+---
+
+### Frequency configuration
+
+#### `MXC_UART_SetFrequency`
+
+Set the baud rate on an already-initialized UART.
+
+```c
+int MXC_UART_SetFrequency(mxc_uart_regs_t *uart, unsigned int baud, mxc_uart_clock_t clock);
+```
+
+Returns the actual baud rate achieved (may differ slightly from the requested rate), or a negative error code.
+
+#### `MXC_UART_GetFrequency`
+
+Get the currently configured baud rate.
+
+```c
+int MXC_UART_GetFrequency(mxc_uart_regs_t *uart);
+```
+
+Returns the baud rate in Hz.
+
+---
+
+### Frame format
+
+#### `MXC_UART_SetDataSize`
+
+Set the number of data bits per character (5–8 bits).
+
+```c
+int MXC_UART_SetDataSize(mxc_uart_regs_t *uart, int dataSize);
+```
+
+#### `MXC_UART_SetStopBits`
+
+Set the number of stop bits.
+
+```c
+int MXC_UART_SetStopBits(mxc_uart_regs_t *uart, mxc_uart_stop_t stopBits);
+```
+
+#### `MXC_UART_SetParity`
+
+Set the parity generation mode.
+
+```c
+int MXC_UART_SetParity(mxc_uart_regs_t *uart, mxc_uart_parity_t parity);
+```
+
+---
+
+### Single-byte I/O
+
+#### `MXC_UART_WriteCharacter`
+
+Write a single byte. Blocks until the TX FIFO has space.
+
+```c
+int MXC_UART_WriteCharacter(mxc_uart_regs_t *uart, uint8_t character);
+```
+
+#### `MXC_UART_ReadCharacter`
+
+Read the next available byte from the RX FIFO. Blocks until data is available.
+
+```c
+int MXC_UART_ReadCharacter(mxc_uart_regs_t *uart);
+```
+
+Returns the character read (as a non-negative int), or a negative error code.
+
+---
+
+### Multi-byte I/O
+
+#### `MXC_UART_Write`
+
+Blocking write of a byte buffer. Blocks until all `*len` bytes have been sent.
+
+```c
+int MXC_UART_Write(mxc_uart_regs_t *uart, const uint8_t *byte, int *len);
+```
+
+#### `MXC_UART_Read`
+
+Blocking read into a buffer. Blocks until `*len` bytes have been received.
+
+```c
+int MXC_UART_Read(mxc_uart_regs_t *uart, uint8_t *buffer, int *len);
+```
+
+---
+
+### Transaction functions
+
+#### `MXC_UART_Transaction`
+
+Perform a blocking (synchronous) UART transaction. Transmits `txLen` bytes then receives `rxLen` bytes.
+
+```c
+int MXC_UART_Transaction(mxc_uart_req_t *req);
+```
+
+#### `MXC_UART_TransactionAsync`
+
+Set up an interrupt-driven (non-blocking) transaction. The `callback` field in `req` is called on completion.
+
+```c
+int MXC_UART_TransactionAsync(mxc_uart_req_t *req);
+```
+
+Call `MXC_UART_AsyncHandler()` from the UART ISR to process events.
+
+#### `MXC_UART_TransactionDMA`
+
+Set up a DMA-driven transaction for minimal CPU overhead.
+
+```c
+int MXC_UART_TransactionDMA(mxc_uart_req_t *req);
+```
+
+<Tip>
+Call `MXC_UART_SetAutoDMAHandlers(uart, true)` before using DMA transactions to let the driver acquire and configure DMA channels automatically.
+</Tip>
+
+#### `MXC_UART_AsyncHandler`
+
+Service function for async transactions. Call this from the UART interrupt handler.
+
+```c
+int MXC_UART_AsyncHandler(mxc_uart_regs_t *uart);
+```
+
+#### `MXC_UART_DMACallback`
+
+Service function for DMA transactions. Call this from the DMA interrupt handler.
+
+```c
+void MXC_UART_DMACallback(int ch, int error);
+```
+
+---
+
+## Example: initialization and DMA loopback
+
+The following example initializes two UART ports, queues an async DMA receive on one, performs a blocking transmit on the other, and waits for the transfer to complete. This pattern is taken from `Examples/MAX78000/UART/main.c`.
+
+```c
+#include "uart.h"
+#include "mxc_device.h"
+
+#define UART_BAUD  115200
+#define BUFF_SIZE  1024
+
+volatile int read_done;
+uint8_t tx_buf[BUFF_SIZE];
+uint8_t rx_buf[BUFF_SIZE];
+
+void read_cb(mxc_uart_req_t *req, int error)
+{
+    read_done = error;
+}
+
+int main(void)
+{
+    int error;
+
+    /* Initialize both UARTs at 115200 baud using the APB clock */
+    error = MXC_UART_Init(MXC_UART1, UART_BAUD, MXC_UART_APB_CLK);
+    if (error != E_NO_ERROR) { return error; }
+
+    error = MXC_UART_Init(MXC_UART2, UART_BAUD, MXC_UART_APB_CLK);
+    if (error != E_NO_ERROR) { return error; }
+
+    /* Enable automatic DMA channel management */
+    MXC_UART_SetAutoDMAHandlers(MXC_UART1, true);
+    MXC_UART_SetAutoDMAHandlers(MXC_UART2, true);
+
+    /* Set up the DMA receive request */
+    mxc_uart_req_t read_req = {
+        .uart     = MXC_UART1,
+        .rxData   = rx_buf,
+        .rxLen    = BUFF_SIZE,
+        .txLen    = 0,
+        .callback = read_cb,
+    };
+
+    /* Set up the blocking transmit request */
+    mxc_uart_req_t write_req = {
+        .uart     = MXC_UART2,
+        .txData   = tx_buf,
+        .txLen    = BUFF_SIZE,
+        .rxLen    = 0,
+        .callback = NULL,
+    };
+
+    read_done = 1;
+    MXC_UART_ClearRXFIFO(MXC_UART1);
+
+    /* Start async DMA receive, then blocking transmit */
+    MXC_UART_TransactionDMA(&read_req);
+    MXC_UART_Transaction(&write_req);
+
+    /* Wait for receive to complete */
+    while (read_done) {}
+
+    return E_NO_ERROR;
+}
+```
+
+<Warning>
+Do not call low-level interrupt functions (`MXC_UART_GetFlags`, `MXC_UART_EnableInt`, etc.) while an async or DMA transaction is in progress — the driver manages interrupt state internally during those transactions.
+</Warning>
+
+---
+
+## Supported microcontrollers
+
+The UART peripheral and this API are available on the following Analog Devices MAX-series parts (non-exhaustive):
+
+- MAX78000
+- MAX78002
+- MAX32690
+- MAX32670 / MAX32672
+- MAX32650 / MAX32655
+- MAX32665 / MAX32666
+
+Consult your part's data sheet for the number of UART instances available and any per-instance clock restrictions (for example, LPUART clock source limitations).

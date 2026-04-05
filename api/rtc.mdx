@@ -1,0 +1,266 @@
+---
+title: "Real-Time Clock (RTC)"
+description: "Use the MAX78000 RTC peripheral to keep time across power cycles, schedule time-of-day and sub-second alarms, and wake the device from any low-power mode."
+keywords: ["RTC", "real-time clock", "alarm", "low power", "MAX78000", "MSDK"]
+---
+
+The MAX78000 real-time clock is a 32-bit seconds counter backed by a dedicated 32.768 kHz crystal (ERTCO). A separate 12-bit sub-seconds register provides 4096 ticks per second (~244 µs resolution). Because the RTC resides in the always-on power domain, it continues running in Sleep, Low Power, Micro Power, Standby, and Backup modes — preserving time and triggering alarms even while the main CPU is off.
+
+## Overview
+
+The RTC provides two independent alarm channels:
+
+- **Time-of-day alarm** — fires when the seconds counter matches a 20-bit programmed value (range 0–0xFFFFF seconds, ~12 days).
+- **Sub-second alarm** — fires when the sub-seconds counter underflows a 32-bit programmed value, enabling periodic interrupts down to sub-millisecond intervals.
+
+Both alarms can generate an interrupt and act as a wakeup source from any low-power mode when `MXC_LP_EnableRTCAlarmWakeup` is called.
+
+---
+
+## Initialization
+
+### `MXC_RTC_Init`
+
+```c
+int MXC_RTC_Init(uint32_t sec, uint16_t ssec);
+```
+
+Resets and initializes the RTC. Sets the seconds counter to `sec` and the sub-seconds counter to `ssec` (12-bit, 0–4095). This is a blocking function — it waits for any pending RTC register write to complete before returning.
+
+**Parameters**
+
+| Name | Description |
+|------|-------------|
+| `sec` | Initial seconds value (32-bit) |
+| `ssec` | Initial sub-seconds value (12-bit, 0–4095) |
+
+**Returns** `E_NO_ERROR` on success, or a negative error code.
+
+<Note>
+Call `MXC_RTC_Init` once at startup, before `MXC_RTC_Start`. Re-calling it resets the counters, which will invalidate any previously set alarms.
+</Note>
+
+---
+
+## Start and stop
+
+### `MXC_RTC_Start`
+
+```c
+int MXC_RTC_Start(void);
+```
+
+Enables the RTC and begins counting. This is a blocking function. Returns `E_NO_ERROR` once the RTC is running.
+
+---
+
+### `MXC_RTC_Stop`
+
+```c
+int MXC_RTC_Stop(void);
+```
+
+Halts the RTC. The current counter values are preserved. Returns `E_NO_ERROR` once stopped.
+
+---
+
+## Reading the current time
+
+### `MXC_RTC_GetTime`
+
+```c
+int MXC_RTC_GetTime(uint32_t *sec, uint32_t *subsec);
+```
+
+Atomically reads both the seconds and sub-seconds counters in a single call. Stores results at the provided pointers. Returns `E_NO_ERROR` or `E_BUSY` if an RTC register access is in progress.
+
+---
+
+### `MXC_RTC_GetSeconds`
+
+```c
+int MXC_RTC_GetSeconds(uint32_t *sec);
+```
+
+Reads the current seconds counter into `*sec`. Returns `E_NO_ERROR` or `E_BUSY`.
+
+---
+
+### `MXC_RTC_GetSubSeconds`
+
+```c
+int MXC_RTC_GetSubSeconds(uint32_t *ssec);
+```
+
+Reads the current sub-seconds counter into `*ssec`. The value is a 12-bit count (0–4095) representing fractions of a second at 4096 Hz. Returns `E_NO_ERROR` or `E_BUSY`.
+
+<Tip>
+The sub-seconds value in seconds is `ssec / 4096.0`. Equivalently, the conversion macro from the official example is:
+
+```c
+#define MSEC_TO_RSSA(x)  (0 - ((x * 4096) / 1000))
+```
+
+This converts a millisecond interval to the sub-second alarm register (RSSA) value by computing the underflow count.
+</Tip>
+
+---
+
+## Alarms
+
+### `MXC_RTC_SetTimeofdayAlarm`
+
+```c
+int MXC_RTC_SetTimeofdayAlarm(uint32_t ras);
+```
+
+Programs the time-of-day alarm to fire when the seconds counter reaches `ras`. The value is a 20-bit quantity (0–0xFFFFF). Calling this function enables the alarm but does not enable the interrupt — call `MXC_RTC_EnableInt` separately.
+
+**Returns** `E_NO_ERROR` or a negative error code.
+
+---
+
+### `MXC_RTC_SetSubsecondAlarm`
+
+```c
+int MXC_RTC_SetSubsecondAlarm(uint32_t rssa);
+```
+
+Programs the sub-second alarm. The alarm fires when the sub-seconds counter underflows the 32-bit value `rssa`. This creates a periodic interrupt: after each underflow the hardware reloads `rssa` and counts down again.
+
+**Returns** `E_NO_ERROR` or a negative error code.
+
+---
+
+## Interrupt control
+
+### Interrupt enable/disable masks
+
+```c
+typedef enum {
+    MXC_RTC_INT_EN_LONG  = MXC_F_RTC_CTRL_TOD_ALARM_IE,  /* Time-of-day alarm */
+    MXC_RTC_INT_EN_SHORT = MXC_F_RTC_CTRL_SSEC_ALARM_IE, /* Sub-second alarm  */
+    MXC_RTC_INT_EN_READY = MXC_F_RTC_CTRL_RDY_IE,        /* RTC ready         */
+} mxc_rtc_int_en_t;
+```
+
+### `MXC_RTC_EnableInt` / `MXC_RTC_DisableInt`
+
+```c
+int MXC_RTC_EnableInt(uint32_t mask);
+int MXC_RTC_DisableInt(uint32_t mask);
+```
+
+Enable or disable one or more RTC interrupt sources. Pass a bitwise OR of `mxc_rtc_int_en_t` values. Both functions are blocking and may return `E_BUSY` if the RTC is mid-write; poll until `E_NO_ERROR` in time-critical code.
+
+---
+
+### `MXC_RTC_GetFlags` / `MXC_RTC_ClearFlags`
+
+```c
+int MXC_RTC_GetFlags(void);
+int MXC_RTC_ClearFlags(int flags);
+```
+
+Read or clear interrupt flags. The return value of `MXC_RTC_GetFlags` is a bitmask of `mxc_rtc_int_fl_t` values:
+
+```c
+typedef enum {
+    MXC_RTC_INT_FL_LONG  = MXC_F_RTC_CTRL_TOD_ALARM, /* Time-of-day alarm flag */
+    MXC_RTC_INT_FL_SHORT = MXC_F_RTC_CTRL_SSEC_ALARM, /* Sub-second alarm flag  */
+    MXC_RTC_INT_FL_READY = MXC_F_RTC_CTRL_RDY,        /* Timer ready flag       */
+} mxc_rtc_int_fl_t;
+```
+
+---
+
+## Square-wave output
+
+The RTC can drive a square wave on the SQW pin for external synchronization or as a clock reference.
+
+```c
+int MXC_RTC_SquareWaveStart(mxc_rtc_freq_sel_t fq);
+int MXC_RTC_SquareWaveStop(void);
+```
+
+Available frequencies (`mxc_rtc_freq_sel_t`): `MXC_RTC_F_1HZ`, `MXC_RTC_F_512HZ`, `MXC_RTC_F_4KHZ`, `MXC_RTC_F_32KHZ`.
+
+---
+
+## Backup domain retention
+
+The RTC counter, alarm registers, and trim values are retained through Sleep, Low Power, Micro Power, and Standby modes. In **Backup** mode, CPU SRAM is lost but the RTC continues running. After a Backup wakeup, inspect `MXC_LP_IsBackupWake()` to distinguish a reset from a scheduled wakeup and restore application state accordingly.
+
+<Warning>
+In Power Down (shutdown) mode, the entire device is de-energized, including the RTC. Time is not retained across a power-down cycle.
+</Warning>
+
+---
+
+## Code example
+
+```c
+#include "rtc.h"
+#include "nvic_table.h"
+
+#define TIME_OF_DAY_SEC   5     /* Alarm after 5 seconds          */
+#define SUBSECOND_MS      250   /* Sub-second alarm every 250 ms  */
+#define MSEC_TO_RSSA(x)   (0 - ((x * 4096) / 1000))
+
+void RTC_IRQHandler(void)
+{
+    int flags = MXC_RTC_GetFlags();
+
+    /* Sub-second alarm */
+    if (flags & MXC_F_RTC_CTRL_SSEC_ALARM) {
+        MXC_RTC_ClearFlags(MXC_F_RTC_CTRL_SSEC_ALARM);
+        /* Periodic action — e.g., sample a sensor */
+    }
+
+    /* Time-of-day alarm */
+    if (flags & MXC_F_RTC_CTRL_TOD_ALARM) {
+        uint32_t sec;
+        MXC_RTC_ClearFlags(MXC_F_RTC_CTRL_TOD_ALARM);
+
+        /* Re-arm for another TIME_OF_DAY_SEC seconds */
+        while (MXC_RTC_DisableInt(MXC_F_RTC_CTRL_TOD_ALARM_IE) == E_BUSY) {}
+        MXC_RTC_GetSeconds(&sec);
+        MXC_RTC_SetTimeofdayAlarm(sec + TIME_OF_DAY_SEC);
+        while (MXC_RTC_EnableInt(MXC_F_RTC_CTRL_TOD_ALARM_IE) == E_BUSY) {}
+    }
+}
+
+int main(void)
+{
+    NVIC_EnableIRQ(RTC_IRQn);
+    MXC_NVIC_SetVector(RTC_IRQn, RTC_IRQHandler);
+
+    /* Initialize RTC at time zero */
+    if (MXC_RTC_Init(0, 0) != E_NO_ERROR) {
+        /* Handle error */
+    }
+
+    /* Set and enable time-of-day alarm */
+    while (MXC_RTC_DisableInt(MXC_F_RTC_CTRL_TOD_ALARM_IE) == E_BUSY) {}
+    MXC_RTC_SetTimeofdayAlarm(TIME_OF_DAY_SEC);
+    while (MXC_RTC_EnableInt(MXC_F_RTC_CTRL_TOD_ALARM_IE) == E_BUSY) {}
+
+    /* Set and enable sub-second alarm */
+    while (MXC_RTC_DisableInt(MXC_F_RTC_CTRL_SSEC_ALARM_IE) == E_BUSY) {}
+    MXC_RTC_SetSubsecondAlarm(MSEC_TO_RSSA(SUBSECOND_MS));
+    while (MXC_RTC_EnableInt(MXC_F_RTC_CTRL_SSEC_ALARM_IE) == E_BUSY) {}
+
+    /* Start the RTC */
+    if (MXC_RTC_Start() != E_NO_ERROR) {
+        /* Handle error */
+    }
+
+    while (1) {
+        /* Application loop — RTC alarms fire asynchronously via ISR */
+    }
+}
+```
+
+<Note>
+The `MXC_RTC_EnableInt` and `MXC_RTC_DisableInt` calls may return `E_BUSY` while the RTC synchronizes with its slow 32.768 kHz clock domain. The `while (... == E_BUSY) {}` pattern shown above is the standard idiom from the official SDK examples.
+</Note>

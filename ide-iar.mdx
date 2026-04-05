@@ -1,0 +1,22 @@
+---
+title: "IAR Embedded Workbench"
+description: "Use IAR Embedded Workbench with the Analog Devices MSDK via CMSIS Pack files."
+---
+
+[IAR Embedded Workbench](https://www.iar.com/products/architectures/arm/iar-embedded-workbench-for-arm/) is a third-party IDE developed by IAR Systems. Analog Devices maintains support files for this environment in the form of CMSIS Pack files.
+
+## License requirement
+
+IAR Embedded Workbench requires a **software license** purchased from IAR. Contact [IAR Systems](https://www.iar.com) for licensing options.
+
+## CMSIS Pack files
+
+CMSIS Pack files bundle the device support files — startup code, peripheral drivers, header files, and SVD register descriptions — needed for IAR Embedded Workbench to target an ADI microcontroller. ADI maintains these pack files and keeps them up to date for supported devices.
+
+## Documentation
+
+Supporting documentation for IAR Embedded Workbench is maintained by IAR. Refer to the [IAR Embedded Workbench for Arm product page](https://www.iar.com/products/architectures/arm/iar-embedded-workbench-for-arm/) and navigate to **User Guides and documentation** for user guides, reference manuals, and tutorials covering project setup, building, flashing, and debugging.
+
+<Note>
+  The MSDK command-line build system and peripheral driver libraries are not integrated into IAR Embedded Workbench projects. IAR projects use the CMSIS Pack files directly. For full MSDK toolchain support, use [VS Code](/ide-vscode) or [Eclipse](/ide-eclipse) instead.
+</Note>

@@ -1,0 +1,216 @@
+---
+title: "Third-party libraries"
+description: "CMSIS-DSP, SDHC/FatFS, CLI, littleFS, LC3 codec, Free Cryptographic Library, CoreMark, and the Unity test framework — all available in the MSDK."
+---
+
+The MSDK bundles several third-party and utility libraries that cover common embedded development needs: DSP math, filesystems, cryptography, benchmarking, and testing. Each library is enabled with a `LIB_*` variable in your `project.mk` file.
+
+---
+
+## CMSIS-DSP
+
+The CMSIS-DSP library provides a suite of common **Digital Signal Processing (DSP)** functions that take advantage of the hardware-accelerated Floating Point Unit (FPU) available on Cortex-M4 microcontrollers. It is distributed in the MSDK as a pre-compiled static library.
+
+The MSDK maintains a port of the official CMSIS-DSP code examples in the `Examples/` directory for each supported microcontroller under the **ARM-DSP** folder.
+
+### Supported parts
+
+All microcontrollers with a Cortex-M4 core.
+
+### Enabling CMSIS-DSP
+
+```makefile
+# project.mk
+
+LIB_CMSIS_DSP = 1
+```
+
+### Build variables
+
+| Variable | Description |
+|---|---|
+| `CMSIS_DSP_VERSION` | Sets the CMSIS-DSP version to use. Defaults to `1.16.2`, which is currently the only supported version. |
+
+For detailed API documentation, see the [CMSIS-DSP official documentation](https://arm-software.github.io/CMSIS-DSP/v1.16.2/index.html).
+
+---
+
+## SDHC / FatFS
+
+The **Secure Digital High Capacity (SDHC)** library provides a higher-level interface built on top of the SDHC Peripheral Driver API. It includes a [FatFS](http://elm-chan.org/fsw/ff/00index_e.html) filesystem implementation for reading and writing files on SD cards.
+
+### Supported parts
+
+- MAX32650
+- MAX32570
+- MAX32665–MAX32666
+- MAX78000
+- MAX78002
+
+### Enabling SDHC
+
+```makefile
+# project.mk
+
+LIB_SDHC = 1
+```
+
+### Build variables
+
+| Variable | Description |
+|---|---|
+| `FATFS_VERSION` | Selects the FatFS version. Accepted values: `ff13` (R0.13), `ff14` (R0.14b), `ff15` (R0.15). |
+| `SDHC_CLK_FREQ` | Sets the SDHC clock frequency in Hz. Defaults to 30 MHz. Reducing this value is a useful first step when debugging communication issues. |
+| `FF_CONF_DIR` | (Available for `FATFS_VERSION = ff15` only.) Sets the directory to search for a custom `ffconf.h` configuration file. |
+
+---
+
+## CLI library
+
+The MSDK includes a pre-made UART command-line interface library in `Libraries/CLI/`. It provides an extensible command processor that wraps your application functions with a CLI without requiring changes to the underlying code.
+
+Features include:
+
+- UART interface support
+- Custom commands with support for multiple arguments
+- Case-insensitive commands and arguments
+- Whitespace-insensitive parsing
+- Built-in `help` command with custom help strings
+
+### Enabling the CLI library
+
+```makefile
+# project.mk
+
+LIB_CLI = 1
+```
+
+Include `cli.h` in your application code, define a command table of type `const command_t[]`, and call `MXC_CLI_Init()` at startup with the UART instance, the command table pointer, and the number of commands.
+
+See `Libraries/CLI/README.md` for a complete usage guide.
+
+---
+
+## littleFS
+
+[littleFS](https://github.com/littlefs-project/littlefs) is a small, power-loss-resilient filesystem designed for microcontrollers. It is well suited for storing configuration data, logs, or application state in internal or external flash.
+
+### Enabling littleFS
+
+```makefile
+# project.mk
+
+LIB_LITTLEFS = 1
+```
+
+---
+
+## LC3 codec
+
+The Low Complexity Communication Codec (LC3) is an efficient, low-latency audio codec used in Bluetooth LE Audio. The MSDK includes the LC3 library for applications that require audio encoding and decoding.
+
+### Enabling LC3
+
+```makefile
+# project.mk
+
+LIB_LC3 = 1
+```
+
+---
+
+## Free Cryptographic Library (FCL)
+
+The Free Cryptographic Library (FCL) is a collection of software-implemented common cryptographic functions. It provides cryptographic primitives for applications that need encryption, hashing, or key management independent of hardware accelerators.
+
+### Enabling FCL
+
+```makefile
+# project.mk
+
+LIB_FCL = 1
+```
+
+---
+
+## CoreMark
+
+[EEMBC's CoreMark®](https://www.eembc.org/coremark/) is a benchmark designed to measure the performance of microcontroller CPUs. It produces a single score that allows direct comparisons between processors.
+
+CoreMark is available as a `Coremark` example application for every supported part in the MSDK. The example contains only the `core_portme.c` and `core_portme.h` hardware-adaptation files; the remainder of the CoreMark source in `Libraries/Coremark/` must remain unmodified to comply with CoreMark rules.
+
+<Note>
+CoreMark is used as an example, not a toggleable library. There is no `LIB_COREMARK` variable — run the `Coremark` example project directly for your target part.
+</Note>
+
+---
+
+## Unity test framework
+
+The [Unity Test Project](https://github.com/ThrowTheSwitch/Unity) is a simple unit testing framework for C. It supports two workflows:
+
+- **Hardware-in-the-loop tests** — compiled and flashed onto a target microcontroller; results are printed to the serial console.
+- **Host machine tests** — compiled with GCC and run natively on a developer's PC for testing hardware-independent software abstractions.
+
+### Supported parts
+
+All parts in the MSDK.
+
+### Enabling Unity
+
+```makefile
+# project.mk
+
+LIB_UNITY = 1
+```
+
+### Running tests on a target microcontroller
+
+Once Unity is enabled, include `unity.h` in your application and use the provided assertion macros:
+
+```c
+#include "unity.h"
+
+int main(void)
+{
+    UnityBegin(__FILE__);
+
+    Unity.NumberOfTests++;
+    TEST_ASSERT_EQUAL(1 + 1, 2);
+
+    Unity.NumberOfTests++;
+    TEST_ASSERT_NOT_EQUAL(1 + 1, 0);
+
+    return (UnityEnd());
+}
+```
+
+Test results are sent to the microcontroller's serial console (defined by `CONSOLE_UART` in the BSP):
+
+```
+-----------------------
+2 Tests 0 Failures 0 Ignored 
+OK
+```
+
+### Running tests on a host machine
+
+When Unity is enabled, a `test` build target becomes available. Running `make test` compiles the source files in the `test/` subfolder of the project into a native binary and executes it:
+
+```bash
+make test
+```
+
+A non-zero return code is passed to the host process if any tests fail, making this suitable for CI/CD integration.
+
+### Build variables
+
+| Variable | Description |
+|---|---|
+| `TEST_CC` | Compiler to use for host-side tests. Defaults to `gcc`. |
+| `TEST_BUILD_DIR` | Output directory for `make test`. Defaults to `build/unittest` inside the current project. |
+| `TEST_SRC_DIR` | Directory searched for `.c` source files when running `make test`. Defaults to the `test/` folder inside the current project. |
+| `TEST_OUTPUT_BINARY` | Output binary filename for `make test`. Useful for CI/CD workflows that need a predictable filename. |
+| `TEST_SRCS` | Additional source files from outside `TEST_SRC_DIR` to include in the host-side test build. |
+
+For a complete list of available assertions, see the [Unity Assertions Reference](https://github.com/ThrowTheSwitch/Unity/blob/master/docs/UnityAssertionsReference.md).

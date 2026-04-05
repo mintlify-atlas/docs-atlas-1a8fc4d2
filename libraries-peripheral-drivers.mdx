@@ -1,0 +1,85 @@
+---
+title: "Peripheral Driver API"
+description: "The core C library that exposes all on-chip peripherals through a higher-level API, organized by header and source files with die-type-specific implementations."
+---
+
+A microcontroller is made up of a CPU surrounded by additional peripheral hardware blocks — timers, memory controllers, UART controllers, ADCs, RTCs, audio interfaces, and more. The **Peripheral Driver API** is the core library in the MSDK that lets the CPU interact with these hardware blocks through a higher-level **Application Programming Interface (API)** rather than direct register access.
+
+## Organization
+
+The Peripheral Driver API source code is organized into two directories:
+
+- **Header files (`.h`)** — `Libraries/PeriphDrivers/Include/`
+  These contain function _declarations_: the function prototypes and their associated documentation.
+
+- **Source files (`.c`)** — `Libraries/PeriphDrivers/Source/`
+  These contain function _definitions_: the actual implementations of the functions declared in the headers.
+
+### Die type and revision files
+
+The implementation files are further organized by **die type** and **hardware revision**. This is worth noting when browsing or debugging through the drivers.
+
+- **Die type files** follow the `_ESXX`, `_MEXX`, or `_AIXX` naming convention. These manage microcontroller-specific details that may interact with other peripheral APIs before ultimately delegating to a revision-specific file.
+
+- **Hardware revision files** follow the `_revX` naming convention. These contain the pure driver implementation for a peripheral block and interact with hardware almost entirely at the register level.
+
+## Die types to part numbers
+
+The source code uses internal die type identifiers rather than external part numbers. Use this table when browsing `Libraries/PeriphDrivers/Source/`.
+
+| Part number | Die type |
+|---|---|
+| MAX32520 | ES17 |
+| MAX32570 | ME13 |
+| MAX32650 | ME10 |
+| MAX32655 | ME17 |
+| MAX32660 | ME11 |
+| MAX32662 | ME12 |
+| MAX32665 | ME14 |
+| MAX32670 | ME15 |
+| MAX32672 | ME21 |
+| MAX32675 | ME16 |
+| MAX32680 | ME20 |
+| MAX32690 | ME18 |
+| MAX78000 | AI85 |
+| MAX78002 | AI87 |
+
+## API documentation
+
+The links below open the Doxygen API reference for each supported microcontroller, hosted on the MSDK GitHub Pages site. Offline copies are also available in the `Documentation/` folder of your MSDK installation.
+
+- [MAX32520 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32520/)
+- [MAX32650 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32650/)
+- [MAX32655 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32655/)
+- [MAX32660 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32660/)
+- [MAX32665–MAX32666 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32665/)
+- [MAX32670 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32670/)
+- [MAX32672 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32672/)
+- [MAX32675 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32675/)
+- [MAX32680 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32680/)
+- [MAX32690 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX32690/)
+- [MAX78000 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX78000/)
+- [MAX78002 API](https://analogdevicesinc.github.io/msdk/Libraries/PeriphDrivers/Documentation/MAX78002/)
+
+## Disabling automatic GPIO and clock initialization
+
+Most Peripheral Driver initialization routines enable system clocks, set clock dividers, and configure GPIO pins automatically. In some cases — such as when integrating with Zephyr — a framework handles this itself, or you may prefer to manage it in custom application code.
+
+The MSDK provides the `MSDK_NO_GPIO_CLK_INIT` compiler definition to disable this automatic initialization. Add it to your `project.mk` via `PROJ_CFLAGS`:
+
+```makefile
+# project.mk
+
+PROJ_CFLAGS += -DMSDK_NO_GPIO_CLK_INIT
+```
+
+<Note>
+The `-D` flag tells the compiler to define a symbol at compile time. In this case, the symbol is `MSDK_NO_GPIO_CLK_INIT`.
+</Note>
+
+## Build variables
+
+| Variable | Description |
+|---|---|
+| `MXC_SPI_VERSION` | Selects the SPI driver version. Accepted values are `v1` (legacy, default) or `v2`. Use `v2` for new projects when backwards compatibility with `v1` is not required. |
+| `PINS_FILE` | Overrides the default GPIO pin definitions. The specified file is compiled instead of the default `Libraries/PeriphDrivers/Source/SYS/pins_xx.c`. Copy the default file as a template before making modifications. |

@@ -1,0 +1,378 @@
+---
+title: "Low Power Modes"
+description: "Enter and exit the MAX78000 sleep hierarchy — from lightweight Sleep to full Power Down — and configure GPIO, RTC, WUT, and LPCMP wakeup sources."
+keywords: ["low power", "sleep", "deep sleep", "backup", "wakeup", "WUT", "LPCMP", "MAX78000", "MSDK"]
+---
+
+The MAX78000 implements a graduated power-mode hierarchy. Each step trades off responsiveness and retained state for lower current consumption. All low-power entry functions in the `lp.h` API handle the necessary CPU and peripheral setup automatically.
+
+## Power mode summary
+
+| Mode | Entry function | CPU state | SRAM | RTC | Wakeup latency |
+|------|---------------|-----------|------|-----|----------------|
+| Active | — | Running | Retained | Running | — |
+| Sleep | `MXC_LP_EnterSleepMode` | WFI | Retained | Running | Low |
+| Low Power (LPM) | `MXC_LP_EnterLowPowerMode` | WFI | Retained | Running | Low |
+| Micro Power (UPM) | `MXC_LP_EnterMicroPowerMode` | WFI | Retained | Running | Low |
+| Standby | `MXC_LP_EnterStandbyMode` | WFI | Retained | Running | Medium |
+| Backup | `MXC_LP_EnterBackupMode` | Off | **Lost** | Running | High (restart) |
+| Power Down | `MXC_LP_EnterPowerDownMode` | Off | **Lost** | **Off** | High (restart) |
+
+<Warning>
+`MXC_LP_EnterBackupMode` and `MXC_LP_EnterPowerDownMode` never return. The CPU state and SRAM contents are not preserved. After wakeup the device restarts from the reset vector. Use `MXC_LP_IsBackupWake()` at startup to detect a backup-mode wakeup and restore application state from non-volatile storage.
+</Warning>
+
+---
+
+## Entering power modes
+
+### `MXC_LP_EnterSleepMode`
+
+```c
+void MXC_LP_EnterSleepMode(void);
+```
+
+Places the device into Sleep mode by executing a WFI (Wait For Interrupt) instruction after disabling high-speed clocks. The RTC, low-power timers (TMR4/5), and all configured wakeup sources remain active. Returns once any enabled interrupt occurs.
+
+---
+
+### `MXC_LP_EnterLowPowerMode`
+
+```c
+void MXC_LP_EnterLowPowerMode(void);
+```
+
+Enters Low Power Mode (LPM). Additional clocks and peripherals beyond Sleep are gated off. Returns once an RTC alarm or external interrupt fires.
+
+---
+
+### `MXC_LP_EnterMicroPowerMode`
+
+```c
+void MXC_LP_EnterMicroPowerMode(void);
+```
+
+Enters Micro Power Mode (UPM), the deepest mode from which the CPU resumes execution at the instruction following the WFI. Returns on any configured wakeup event.
+
+---
+
+### `MXC_LP_EnterStandbyMode`
+
+```c
+void MXC_LP_EnterStandbyMode(void);
+```
+
+Enters Standby mode. Core regulators are reduced further. Returns once an RTC alarm or external interrupt occurs.
+
+---
+
+### `MXC_LP_EnterBackupMode`
+
+```c
+void MXC_LP_EnterBackupMode(void);
+```
+
+Enters Backup mode. CPU execution stops and SRAM is powered down. The RTC and always-on domain remain active. **This function does not return.** The device restarts from the reset vector after wakeup.
+
+Use `MXC_LP_IsBackupWake()` at the start of `main()` to detect whether a backup-mode wakeup caused the current boot.
+
+```c
+int MXC_LP_IsBackupWake(void);
+// Returns 1 if device woke from BACKUP, 0 otherwise
+```
+
+---
+
+### `MXC_LP_EnterPowerDownMode`
+
+```c
+void MXC_LP_EnterPowerDownMode(void);
+```
+
+Enters Power Down mode. The entire device is de-energized except for a minimal wakeup circuit. **This function does not return.** Wakeup sources include an RTC alarm (if the RTC crystal is externally supplied), a USB wakeup, or an external interrupt on a dedicated pin.
+
+<Note>
+The example code in `Examples/MAX78000/LP/main.c` includes a 2-second startup delay (`MXC_Delay(MXC_DELAY_SEC(2))`) to preserve JTAG/SWD debug access after a power-down restart. This is strongly recommended during development.
+</Note>
+
+---
+
+## Configuring clock power-down
+
+```c
+int MXC_LP_ConfigDeepSleepClocks(uint32_t mask);
+```
+
+Controls which oscillators are powered down when the device enters deep sleep. Pass a bitmask of `mxc_lp_cfg_ds_pd_t` values:
+
+| Constant | Clock |
+|----------|-------|
+| `MXC_LP_IPO` | IPO (100 MHz internal primary oscillator) |
+| `MXC_LP_IBRO` | IBRO (7.3728 MHz) |
+
+This function overwrites all previous deep-sleep clock settings on each call. Any clock not included in the mask will remain powered on during deep sleep.
+
+---
+
+## GPIO wakeup
+
+### `MXC_LP_EnableGPIOWakeup`
+
+```c
+void MXC_LP_EnableGPIOWakeup(mxc_gpio_cfg_t *wu_pins);
+```
+
+Marks the specified GPIO port and pin mask as wakeup sources. Only the `port` and `mask` fields of `mxc_gpio_cfg_t` are used. Call this function once per port if wakeup pins span multiple ports.
+
+This function does **not** configure the GPIO pin direction or interrupt — you must call `MXC_GPIO_Config` and `MXC_GPIO_SetWakeEn` separately.
+
+---
+
+### `MXC_LP_DisableGPIOWakeup`
+
+```c
+void MXC_LP_DisableGPIOWakeup(mxc_gpio_cfg_t *wu_pins);
+```
+
+Removes the specified pins from the wakeup source list.
+
+---
+
+### Additional GPIO wakeup helpers
+
+```c
+uint32_t MXC_LP_GetGPIOWakeupEnable(uint8_t port);
+uint32_t MXC_LP_GetGPIOWakeupStatus(uint8_t port);
+void     MXC_LP_ClearGPIOWakeupStatus(uint8_t port, uint32_t mask);
+void     MXC_LP_ClearWakeStatus(void);  // clears all wakeup status bits
+```
+
+---
+
+## RTC alarm wakeup
+
+### `MXC_LP_EnableRTCAlarmWakeup` / `MXC_LP_DisableRTCAlarmWakeup`
+
+```c
+void MXC_LP_EnableRTCAlarmWakeup(void);
+void MXC_LP_DisableRTCAlarmWakeup(void);
+```
+
+Register or deregister the RTC alarm as a wakeup source at the power-sequencer level. You must also configure the RTC alarm itself (see [Real-Time Clock](/api/rtc)) and ensure `NVIC_EnableIRQ(RTC_IRQn)` is called before entering a low-power mode.
+
+---
+
+## Timer wakeup
+
+```c
+void MXC_LP_EnableTimerWakeup(mxc_tmr_regs_t *tmr);
+void MXC_LP_DisableTimerWakeup(mxc_tmr_regs_t *tmr);
+```
+
+Register a general-purpose timer as a wakeup source. Pair with `MXC_TMR_EnableWakeup` for the peripheral-side registration (see [Timers](/api/timers)).
+
+---
+
+## Wake-Up Timer (WUT)
+
+The WUT is a dedicated low-power timer (separate from TMR0–5) clocked from the 32.768 kHz ERTCO. It is designed specifically for wakeup scheduling and can operate during all low-power modes.
+
+### `MXC_WUT_Init`
+
+```c
+void MXC_WUT_Init(mxc_wut_pres_t pres);
+```
+
+Initializes the WUT with the specified prescaler. Available prescaler values (from `mxc_wut_pres_t`): 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096.
+
+---
+
+### `MXC_WUT_Enable` / `MXC_WUT_Disable`
+
+```c
+void MXC_WUT_Enable(void);
+void MXC_WUT_Disable(void);
+```
+
+Start or stop the WUT counter.
+
+---
+
+### `MXC_WUT_Config`
+
+```c
+void MXC_WUT_Config(const mxc_wut_cfg_t *cfg);
+```
+
+Applies a timer mode and compare count to the WUT:
+
+```c
+typedef struct {
+    mxc_wut_mode_t mode;     /* Timer mode (ONESHOT, CONTINUOUS, etc.) */
+    uint32_t       cmp_cnt;  /* Compare register value in timer ticks */
+} mxc_wut_cfg_t;
+```
+
+---
+
+### WUT tick conversion
+
+```c
+int MXC_WUT_GetTicks(uint32_t time, mxc_wut_unit_t units, uint32_t *ticks);
+int MXC_WUT_GetTime(uint32_t ticks, uint32_t *time, mxc_wut_unit_t *units);
+```
+
+Convert between real time (nanoseconds, microseconds, milliseconds, or seconds) and raw WUT tick counts.
+
+---
+
+### WUT wakeup registration
+
+```c
+void MXC_LP_EnableWUTAlarmWakeup(void);
+void MXC_LP_DisableWUTAlarmWakeup(void);
+```
+
+Register or deregister the WUT as a wakeup source in the power sequencer.
+
+---
+
+## Low Power Comparator (LPCMP)
+
+The LPCMP provides four analog voltage comparators (CMP0–CMP3) that remain active during low-power modes and can wake the device on a voltage crossing.
+
+### `MXC_LPCMP_Init`
+
+```c
+int MXC_LPCMP_Init(mxc_lpcmp_cmpsel_t cmp);
+```
+
+Enables the selected comparator. `cmp` is one of `MXC_LPCMP_CMP0` … `MXC_LPCMP_CMP3`.
+
+---
+
+### `MXC_LPCMP_Shutdown`
+
+```c
+int MXC_LPCMP_Shutdown(mxc_lpcmp_cmpsel_t cmp);
+```
+
+Disables the selected comparator.
+
+---
+
+### LPCMP interrupt control
+
+```c
+int MXC_LPCMP_EnableInt(mxc_lpcmp_cmpsel_t cmp, mxc_lpcmp_polarity_t pol);
+int MXC_LPCMP_DisableInt(mxc_lpcmp_cmpsel_t cmp);
+int MXC_LPCMP_GetFlags(mxc_lpcmp_cmpsel_t cmp);
+int MXC_LPCMP_ClearFlags(mxc_lpcmp_cmpsel_t cmp);
+int MXC_LPCMP_SelectPolarity(mxc_lpcmp_cmpsel_t cmp, mxc_lpcmp_polarity_t pol);
+```
+
+`mxc_lpcmp_polarity_t` selects the edge that triggers the interrupt:
+
+| Constant | Trigger |
+|----------|---------|
+| `MXC_LPCMP_POL_RISE` | Rising edge of comparator output |
+| `MXC_LPCMP_POL_FALL` | Falling edge of comparator output |
+
+---
+
+### LPCMP wakeup registration
+
+```c
+void MXC_LP_EnableLPCMPWakeup(mxc_lpcmp_cmpsel_t cmp);
+void MXC_LP_DisableLPCMPWakeup(mxc_lpcmp_cmpsel_t cmp);
+```
+
+Register or deregister a comparator as a wakeup source in the power sequencer.
+
+---
+
+## Code example — sleep/wake cycle
+
+This example puts the device to sleep, waking either on a GPIO button press or on an RTC alarm (select with compile-time defines matching the official LP example pattern).
+
+```c
+#include "lp.h"
+#include "rtc.h"
+#include "wut.h"
+#include "nvic_table.h"
+#include "gpio.h"
+#include "pb.h"     /* board push-button driver */
+
+#define WAKE_INTERVAL_SEC  4
+
+/* RTC alarm handler — clears flags and lets the main loop continue */
+void RTC_IRQHandler(void)
+{
+    int flags = MXC_RTC->ctrl;
+    if (flags & MXC_F_RTC_CTRL_TOD_ALARM) {
+        MXC_RTC->ctrl &= ~MXC_F_RTC_CTRL_TOD_ALARM;
+    }
+}
+
+/* Button handler — sets a flag so setTrigger() can exit its spin-wait */
+volatile int button_pressed = 0;
+void button_handler(void *pb) { button_pressed = 1; }
+
+/* Arm an RTC one-shot alarm WAKE_INTERVAL_SEC seconds from now */
+static void arm_rtc_alarm(void)
+{
+    while (MXC_RTC_Init(0, 0) == E_BUSY) {}
+    while (MXC_RTC_DisableInt(MXC_F_RTC_CTRL_TOD_ALARM_IE) == E_BUSY) {}
+    while (MXC_RTC_SetTimeofdayAlarm(WAKE_INTERVAL_SEC) == E_BUSY) {}
+    while (MXC_RTC_EnableInt(MXC_F_RTC_CTRL_TOD_ALARM_IE) == E_BUSY) {}
+    while (MXC_RTC_Start() == E_BUSY) {}
+}
+
+int main(void)
+{
+    /* 2-second startup delay preserves JTAG/SWD access after wakeup restart */
+    MXC_Delay(MXC_DELAY_SEC(2));
+
+    /* Register interrupt handlers */
+    MXC_NVIC_SetVector(RTC_IRQn, RTC_IRQHandler);
+    NVIC_EnableIRQ(RTC_IRQn);
+
+    /* Register GPIO wakeup (push button on PB0) */
+    PB_RegisterCallback(0, button_handler);
+    MXC_LP_EnableGPIOWakeup((mxc_gpio_cfg_t *)&pb_pin[0]);
+    MXC_GPIO_SetWakeEn(pb_pin[0].port, pb_pin[0].mask);
+
+    /* Also allow the RTC alarm to wake the device */
+    MXC_LP_EnableRTCAlarmWakeup();
+
+    while (1) {
+        /* Arm the RTC alarm for the next wakeup */
+        arm_rtc_alarm();
+
+        /* ----- Enter Sleep ----- */
+        MXC_LP_EnterSleepMode();
+        /* Returns here after GPIO or RTC wakeup */
+
+        /* ----- Enter Low Power Mode ----- */
+        arm_rtc_alarm();
+        MXC_LP_EnterLowPowerMode();
+
+        /* ----- Enter Standby ----- */
+        arm_rtc_alarm();
+        MXC_LP_EnterStandbyMode();
+
+        /* ----- Enter Backup (device restarts after wakeup) ----- */
+        arm_rtc_alarm();
+        MXC_LP_EnterBackupMode();
+        /* Code below this line is unreachable during backup */
+    }
+}
+```
+
+<Tip>
+When using multiple wakeup sources, call `MXC_LP_ClearWakeStatus()` after wakeup to reset the status flags before re-entering a low-power mode.
+</Tip>
+
+<Note>
+The WUT (`MXC_LP_EnableWUTAlarmWakeup`) and LPCMP (`MXC_LP_EnableLPCMPWakeup`) are registered separately from RTC and GPIO sources. You can enable any combination simultaneously — the first event to occur wakes the device.
+</Note>

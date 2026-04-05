@@ -1,0 +1,326 @@
+---
+title: "ADC"
+description: "Perform analog-to-digital conversions on the MAX78000 using the MSDK ADC peripheral driver, including channel selection, blocking and async conversions, and voltage monitors."
+keywords: ["ADC", "MAX78000", "MSDK", "MXC_ADC_Init", "MXC_ADC_StartConversion", "analog", "mxc_adc_chsel_t"]
+---
+
+## Overview
+
+The MAX78000 integrates a 10-bit successive-approximation ADC with 17 selectable input channels: eight external analog input pins (AIN0–AIN7) and nine internal signals for monitoring on-chip supply voltages. The driver supports both **blocking** and **interrupt-driven asynchronous** conversions, hardware voltage monitors with configurable thresholds, and a selectable internal or external voltage reference.
+
+<Note>
+Include `adc.h` and link against the PeriphDriver library for your target. External ADC pins must be configured with the appropriate `gpio_cfg_adc_ainX` constant from `mxc_pins.h` before starting conversions.
+</Note>
+
+---
+
+## Channel selection
+
+`mxc_adc_chsel_t` identifies the ADC input source.
+
+```c
+typedef enum {
+    MXC_ADC_CH_0     = 0x00, // AIN0 – external analog input
+    MXC_ADC_CH_1     = 0x01, // AIN1 – external analog input
+    MXC_ADC_CH_2     = 0x02, // AIN2 – external analog input
+    MXC_ADC_CH_3     = 0x03, // AIN3 – external analog input
+    MXC_ADC_CH_4     = 0x04, // AIN0 divided by 5
+    MXC_ADC_CH_5     = 0x05, // AIN1 divided by 5
+    MXC_ADC_CH_6     = 0x06, // VDDB divided by 4
+    MXC_ADC_CH_7     = 0x07, // VDD18
+    MXC_ADC_CH_VCOREA = 0x08, // VDD12 (CNN core A)
+    MXC_ADC_CH_VCOREB = 0x09, // CNN core B supply
+    MXC_ADC_CH_VRXOUT = 0x0A, // VRTC divided by 2
+    MXC_ADC_CH_VTXOUT = 0x0B, // Temperature monitor
+    MXC_ADC_CH_VDDA  = 0x0C, // Analog supply VDDA
+    MXC_ADC_CH_VDDB  = 0x0D, // Analog supply VDDB
+    MXC_ADC_CH_VDDIO = 0x0E, // Digital I/O supply
+    MXC_ADC_CH_VDDIOH = 0x0F, // High-voltage I/O supply
+    MXC_ADC_CH_VREGI = 0x10, // Internal regulator input
+} mxc_adc_chsel_t;
+```
+
+---
+
+## Data types
+
+### `mxc_adc_conversion_req_t`
+
+Used with `MXC_ADC_Convert()` and `MXC_ADC_ConvertAsync()` for a fully self-contained conversion request.
+
+```c
+typedef struct {
+    mxc_adc_chsel_t        channel;    // Channel to convert
+    mxc_adc_scale_t        scale;      // Input scaling (external channels only)
+    int                    rawADCValue; // Result written here on completion
+    mxc_adc_complete_cb_t  callback;   // Called when conversion finishes (async)
+} mxc_adc_conversion_req_t;
+```
+
+### `mxc_adc_monitor_req_t`
+
+Configures one of the four hardware voltage monitors.
+
+```c
+typedef struct {
+    mxc_adc_monitor_t   monitor;       // Monitor index (0–3)
+    mxc_adc_scale_t     scale;         // Scale for external channels
+    mxc_adc_chsel_t     channel;       // Channel to watch
+    int                 lowThreshold;  // Alert below this raw count
+    int                 highThreshold; // Alert above this raw count
+    mxc_adc_monitor_cb_t callback;     // Called when limit is crossed (async)
+} mxc_adc_monitor_req_t;
+```
+
+### `mxc_adc_scale_t` — input scaling
+
+Internal channels apply their own fixed scaling. For external channels, use these values:
+
+| Value | Effect |
+|---|---|
+| `MXC_ADC_SCALE_2X` | Scale by 2× (reference halved) |
+| `MXC_ADC_SCALE_1` | No scaling (1×) |
+| `MXC_ADC_SCALE_2` | Divide by 2 |
+| `MXC_ADC_SCALE_3` | Divide by 3 |
+| `MXC_ADC_SCALE_4` | Divide by 4 |
+| `MXC_ADC_SCALE_6` | Divide by 6 |
+| `MXC_ADC_SCALE_8` | Divide by 8 |
+
+### `mxc_adc_ref_t` — voltage reference
+
+| Value | Description |
+|---|---|
+| `MXC_ADC_REF_INT` | Internal bandgap reference (default) |
+| `MXC_ADC_REF_EXT` | External reference on AIN pins |
+
+### Callback types
+
+```c
+// Fired when a conversion completes (async path)
+typedef void (*mxc_adc_complete_cb_t)(void *req, int error);
+
+// Fired when a monitor threshold is crossed (async path)
+typedef void (*mxc_adc_monitor_cb_t)(void *req, int error);
+```
+
+---
+
+## API reference
+
+### `MXC_ADC_Init`
+
+```c
+int MXC_ADC_Init(void);
+```
+
+Powers up and initializes the ADC peripheral. Must be called before any conversion. Returns `E_NO_ERROR` on success.
+
+---
+
+### `MXC_ADC_Shutdown`
+
+```c
+int MXC_ADC_Shutdown(void);
+```
+
+Powers down the ADC. Call when the ADC is no longer needed to reduce current consumption. Returns `E_NO_ERROR` on success.
+
+---
+
+### `MXC_ADC_SetConversionSpeed`
+
+```c
+int MXC_ADC_SetConversionSpeed(uint32_t hz);
+```
+
+Sets the ADC sample clock frequency. Returns the actual frequency achieved, or a negative error code.
+
+```c
+int MXC_ADC_GetConversionSpeed(void);
+```
+
+Returns the currently configured conversion clock frequency.
+
+<Tip>
+Lower conversion speeds improve accuracy on high-impedance sources. Higher speeds reduce latency when sampling rapidly changing signals.
+</Tip>
+
+---
+
+### `MXC_ADC_RefSelect`
+
+```c
+void MXC_ADC_RefSelect(mxc_adc_ref_t ref);
+```
+
+Selects the ADC voltage reference. The internal bandgap reference is used by default after `MXC_ADC_Init()`.
+
+---
+
+### `MXC_ADC_StartConversion` (blocking)
+
+```c
+int MXC_ADC_StartConversion(mxc_adc_chsel_t channel);
+```
+
+Starts a conversion on `channel` and blocks until complete. Returns the raw 10-bit ADC result on success, or a negative error code. Retrieve the result with `MXC_ADC_GetData()` to check for overflow.
+
+---
+
+### `MXC_ADC_StartConversionAsync`
+
+```c
+int MXC_ADC_StartConversionAsync(mxc_adc_chsel_t channel,
+                                  mxc_adc_complete_cb_t callback);
+```
+
+Starts a conversion and returns immediately. `callback` is called from `MXC_ADC_Handler()` when the conversion finishes. The result is passed as the `error` parameter of the callback (positive value = raw count, negative = error code).
+
+<Warning>
+The ADC interrupt must be enabled (`NVIC_EnableIRQ(ADC_IRQn)`) and your `ADC_IRQHandler` must call `MXC_ADC_Handler()` for the callback to fire.
+</Warning>
+
+---
+
+### `MXC_ADC_GetData`
+
+```c
+int MXC_ADC_GetData(uint16_t *outdata);
+```
+
+Reads the result of the most recent conversion into `*outdata`. Returns `E_NO_ERROR` normally or `E_OVERFLOW` if the input exceeded the reference voltage.
+
+---
+
+### `MXC_ADC_Convert` and `MXC_ADC_ConvertAsync`
+
+Higher-level wrappers that bundle channel, scale, and result in a single struct:
+
+```c
+int MXC_ADC_Convert(mxc_adc_conversion_req_t *req);
+int MXC_ADC_ConvertAsync(mxc_adc_conversion_req_t *req);
+```
+
+On completion, `req->rawADCValue` holds the result.
+
+---
+
+### `MXC_ADC_Handler`
+
+```c
+int MXC_ADC_Handler(void);
+```
+
+Process ADC interrupts. Call from the `ADC_IRQHandler` ISR when using any async API.
+
+---
+
+### Voltage monitors
+
+The ADC includes four independent monitors that watch a channel and fire a callback (or block synchronously) when it crosses a threshold.
+
+```c
+void MXC_ADC_SetMonitorChannel(mxc_adc_monitor_t monitor, mxc_adc_chsel_t channel);
+void MXC_ADC_SetMonitorHighThreshold(mxc_adc_monitor_t monitor, uint32_t threshold);
+void MXC_ADC_SetMonitorLowThreshold(mxc_adc_monitor_t monitor, uint32_t threshold);
+void MXC_ADC_EnableMonitor(mxc_adc_monitor_t monitors);
+void MXC_ADC_DisableMonitor(mxc_adc_monitor_t monitors);
+```
+
+Thresholds are expressed in raw ADC counts (0–1023 for the 10-bit ADC).
+
+---
+
+### Interrupt control
+
+```c
+void MXC_ADC_EnableInt(uint32_t flags);
+void MXC_ADC_DisableInt(uint32_t flags);
+int  MXC_ADC_GetFlags(void);
+void MXC_ADC_ClearFlags(uint32_t flags);
+```
+
+---
+
+## Code example: single-channel blocking ADC read
+
+This example mirrors `Examples/MAX78000/ADC/main.c`. It initializes the ADC, optionally configures a voltage monitor, and polls channel 0 in a loop.
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+#include "mxc_device.h"
+#include "adc.h"
+#include "gpio.h"
+#include "mxc_pins.h"
+
+int main(void)
+{
+    uint16_t adc_val;
+
+    // Configure AIN0 GPIO pin for analog input
+    MXC_GPIO_Config(&gpio_cfg_adc_ain0);
+
+    // Initialize and start the ADC
+    if (MXC_ADC_Init() != E_NO_ERROR) {
+        printf("ADC init failed\n");
+        while (1) {}
+    }
+
+    // Configure a monitor on channel 0 to flag out-of-range values
+    MXC_ADC_SetMonitorChannel(MXC_ADC_MONITOR_0, MXC_ADC_CH_0);
+    MXC_ADC_SetMonitorHighThreshold(MXC_ADC_MONITOR_0, 0x300);
+    MXC_ADC_SetMonitorLowThreshold(MXC_ADC_MONITOR_0, 0x025);
+    MXC_ADC_EnableMonitor(MXC_ADC_MONITOR_0);
+
+    while (1) {
+        // Blocking conversion on channel 0
+        MXC_ADC_StartConversion(MXC_ADC_CH_0);
+
+        int overflow = (MXC_ADC_GetData(&adc_val) == E_OVERFLOW);
+        printf("AIN0 raw: 0x%04x%s\n", adc_val, overflow ? " (overflow)" : "");
+
+        // Check monitor limits
+        if (MXC_ADC_GetFlags() &
+            (MXC_F_ADC_INTR_LO_LIMIT_IF | MXC_F_ADC_INTR_HI_LIMIT_IF)) {
+            printf("Voltage limit exceeded on AIN0\n");
+            MXC_ADC_ClearFlags(MXC_F_ADC_INTR_LO_LIMIT_IF |
+                               MXC_F_ADC_INTR_HI_LIMIT_IF);
+        }
+
+        MXC_Delay(MSEC(250));
+    }
+}
+```
+
+### Asynchronous conversion example
+
+```c
+#include "adc.h"
+
+volatile int adc_done = 0;
+uint16_t adc_result;
+
+void adc_complete_cb(void *req, int error)
+{
+    adc_done = 1;
+}
+
+void ADC_IRQHandler(void)
+{
+    MXC_ADC_Handler();
+}
+
+void read_adc_async(void)
+{
+    NVIC_EnableIRQ(ADC_IRQn);
+
+    adc_done = 0;
+    MXC_ADC_StartConversionAsync(MXC_ADC_CH_0, adc_complete_cb);
+
+    while (!adc_done) {}  // wait for interrupt
+
+    MXC_ADC_GetData(&adc_result);
+    printf("AIN0 raw: 0x%04x\n", adc_result);
+}
+```

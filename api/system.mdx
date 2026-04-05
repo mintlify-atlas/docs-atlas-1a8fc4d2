@@ -1,0 +1,484 @@
+---
+title: "System functions"
+description: "System initialization, clock management, peripheral resets, delay utilities, assertion macros, and the instruction cache controller for MAX78000."
+---
+
+The system layer provides foundational services used by every other peripheral driver: clock selection and gating, peripheral resets, critical-section guards, chip identification, delay timing, debug assertions, and instruction cache management.
+
+These functions are declared across three headers that are all included automatically by `mxc.h`:
+
+| Header         | Provides |
+| -------------- | -------- |
+| `mxc_sys.h`    | Clock control, peripheral resets, critical sections, USN, RISC-V core management |
+| `mxc_delay.h`  | Blocking and asynchronous microsecond delays |
+| `mxc_assert.h` | Debug assertion macros and the underlying `mxc_assert()` callback |
+| `icc.h`        | Instruction Cache Controller (ICC) enable, disable, flush |
+
+```c
+#include "mxc.h"   /* pulls in all four headers above */
+```
+
+---
+
+## Clock control
+
+### `MXC_SYS_Clock_Select`
+
+Select the system clock source. After switching, call `SystemCoreClockUpdate()` to update the CMSIS global clock variable.
+
+```c
+int MXC_SYS_Clock_Select(mxc_sys_system_clock_t clock);
+```
+
+<ParamField path="clock" type="mxc_sys_system_clock_t" required>
+  The clock source to switch to. One of:
+
+  | Enumerator               | Description |
+  | ------------------------ | ----------- |
+  | `MXC_SYS_CLOCK_IPO`     | Internal Primary Oscillator (100 MHz) |
+  | `MXC_SYS_CLOCK_IBRO`    | Internal Baud Rate Oscillator (7.3728 MHz) |
+  | `MXC_SYS_CLOCK_ISO`     | Internal Secondary Oscillator (60 MHz) |
+  | `MXC_SYS_CLOCK_INRO`    | Internal Nanoring Oscillator (8 kHz) |
+  | `MXC_SYS_CLOCK_ERTCO`   | External RTC Crystal Oscillator (32.768 kHz) |
+  | `MXC_SYS_CLOCK_EXTCLK`  | External clock input (frequency set by `EXTCLK_FREQ`) |
+</ParamField>
+
+Returns `E_NO_ERROR` on success or a negative [error code](/api/error-codes) on failure.
+
+```c
+/* Switch to the Internal Primary Oscillator, then refresh SystemCoreClock */
+MXC_SYS_Clock_Select(MXC_SYS_CLOCK_IPO);
+SystemCoreClockUpdate();
+```
+
+### `MXC_SYS_SetClockDiv` / `MXC_SYS_GetClockDiv`
+
+Set or read the system clock divider applied after the clock source.
+
+```c
+void MXC_SYS_SetClockDiv(mxc_sys_system_clock_div_t div);
+mxc_sys_system_clock_div_t MXC_SYS_GetClockDiv(void);
+```
+
+<ParamField path="div" type="mxc_sys_system_clock_div_t" required>
+  Divider value: `MXC_SYS_CLOCK_DIV_1`, `_DIV_2`, `_DIV_4`, `_DIV_8`, `_DIV_16`, `_DIV_32`, `_DIV_64`, or `_DIV_128`.
+</ParamField>
+
+### `MXC_SYS_ClockEnable` / `MXC_SYS_ClockDisable`
+
+Enable or disable the peripheral bus clock for a specific peripheral.
+
+```c
+void MXC_SYS_ClockEnable(mxc_sys_periph_clock_t clock);
+void MXC_SYS_ClockDisable(mxc_sys_periph_clock_t clock);
+int  MXC_SYS_IsClockEnabled(mxc_sys_periph_clock_t clock);
+```
+
+<ParamField path="clock" type="mxc_sys_periph_clock_t" required>
+  Peripheral clock to control. Examples: `MXC_SYS_PERIPH_CLOCK_GPIO0`, `MXC_SYS_PERIPH_CLOCK_UART0`, `MXC_SYS_PERIPH_CLOCK_I2C0`, `MXC_SYS_PERIPH_CLOCK_SPI1`, `MXC_SYS_PERIPH_CLOCK_DMA`. See `mxc_sys.h` for the complete enumeration.
+</ParamField>
+
+`MXC_SYS_IsClockEnabled` returns a non-zero value if the clock is enabled, or `0` if it is disabled.
+
+### `MXC_SYS_RTCClockEnable` / `MXC_SYS_RTCClockDisable`
+
+Enable or disable the 32 kHz RTC oscillator.
+
+```c
+void MXC_SYS_RTCClockEnable(void);
+int  MXC_SYS_RTCClockDisable(void);
+```
+
+### `MXC_SYS_Clock_Timeout`
+
+Wait for a clock-ready flag to assert, with a built-in timeout.
+
+```c
+int MXC_SYS_Clock_Timeout(uint32_t ready);
+```
+
+Returns `E_NO_ERROR` when the clock is ready, or `E_TIME_OUT` if the timeout expires.
+
+### `SystemCoreClockUpdate`
+
+CMSIS-standard function that reads the hardware clock-control registers and updates the global `SystemCoreClock` variable (in Hz). Call this after any clock source or divider change.
+
+```c
+void SystemCoreClockUpdate(void);
+```
+
+```c
+MXC_SYS_Clock_Select(MXC_SYS_CLOCK_IPO);
+SystemCoreClockUpdate();
+printf("Core clock: %lu Hz\n", SystemCoreClock);
+```
+
+---
+
+## Peripheral resets
+
+### `MXC_SYS_Reset_Periph`
+
+Assert and then de-assert the reset for one or more peripherals.
+
+```c
+void MXC_SYS_Reset_Periph(mxc_sys_reset_t reset);
+```
+
+<ParamField path="reset" type="mxc_sys_reset_t" required>
+  Peripheral reset target from the `mxc_sys_reset_t` enumeration. Examples: `MXC_SYS_RESET0_UART0`, `MXC_SYS_RESET0_I2C0`, `MXC_SYS_RESET0_GPIO0`, `MXC_SYS_RESET0_DMA`, `MXC_SYS_RESET0_SOFT`, `MXC_SYS_RESET0_SYS`. See `mxc_sys.h` for the complete list.
+</ParamField>
+
+```c
+/* Hard-reset UART0 before re-initializing it */
+MXC_SYS_Reset_Periph(MXC_SYS_RESET0_UART0);
+MXC_UART_Init(MXC_UART0, 115200, MXC_UART_IBRO_CLK);
+```
+
+---
+
+## Critical sections
+
+A critical section disables interrupts for the duration of a code block, preventing preemption by interrupt service routines. Works on both ARM Cortex-M and RISC-V cores.
+
+### `MXC_SYS_Crit_Enter` / `MXC_SYS_Crit_Exit`
+
+```c
+static inline void MXC_SYS_Crit_Enter(void);
+static inline void MXC_SYS_Crit_Exit(void);
+static inline int  MXC_SYS_In_Crit_Section(void);
+```
+
+```c
+MXC_SYS_Crit_Enter();
+/* Interrupts are disabled here */
+shared_buffer[head] = value;
+head = (head + 1) % BUFFER_SIZE;
+MXC_SYS_Crit_Exit();
+```
+
+### `MXC_CRITICAL` macro
+
+A convenience macro that wraps a code block between `MXC_SYS_Crit_Enter()` and `MXC_SYS_Crit_Exit()`:
+
+```c
+#define MXC_CRITICAL(code) { MXC_SYS_Crit_Enter(); code; MXC_SYS_Crit_Exit(); }
+```
+
+```c
+MXC_CRITICAL(
+    shared_buffer[head] = value;
+    head = (head + 1) % BUFFER_SIZE;
+)
+```
+
+<Warning>
+  `MXC_CRITICAL` does not support nesting. Do not call `MXC_SYS_Crit_Enter()` or `MXC_CRITICAL` from inside an already-entered critical section.
+</Warning>
+
+---
+
+## Unique serial number
+
+### `MXC_SYS_GetUSN`
+
+Read the device Unique Serial Number (USN) from flash information space and optionally verify its AES checksum.
+
+```c
+int MXC_SYS_GetUSN(uint8_t *usn, uint8_t *checksum);
+```
+
+<ParamField path="usn" type="uint8_t *" required>
+  Pointer to a buffer that receives the USN. The buffer must be at least `MXC_SYS_USN_LEN` (13) bytes long.
+</ParamField>
+
+<ParamField path="checksum" type="uint8_t *">
+  Optional pointer to a buffer for the AES checksum. Pass `NULL` to skip checksum verification. If non-`NULL`, the AES engine is used to verify the USN integrity.
+</ParamField>
+
+Returns `E_NO_ERROR` on success.
+
+```c
+uint8_t usn[MXC_SYS_USN_LEN];
+
+if (MXC_SYS_GetUSN(usn, NULL) == E_NO_ERROR) {
+    /* usn[] now holds the 13-byte device serial number */
+}
+```
+
+---
+
+## RISC-V core management
+
+The MAX78000 contains a secondary RISC-V core. The following functions control it from the ARM core.
+
+```c
+void     MXC_SYS_RISCVRun(void);       /* Start the RISC-V core */
+void     MXC_SYS_RISCVShutdown(void);  /* Halt the RISC-V core */
+uint32_t MXC_SYS_RiscVClockRate(void); /* Returns RISC-V core clock in Hz */
+```
+
+---
+
+## Delay functions
+
+Delay utilities use the ARM SysTick timer (Cortex-M core) or the Performance Counter (RISC-V core). All durations are specified in **microseconds**.
+
+Helper macros convert common units:
+
+```c
+MXC_DELAY_SEC(s)    /* seconds      → microseconds: s × 1,000,000 */
+MXC_DELAY_MSEC(ms)  /* milliseconds → microseconds: ms × 1,000     */
+MXC_DELAY_USEC(us)  /* microseconds (pass-through)                  */
+```
+
+### `MXC_Delay` — blocking delay
+
+```c
+int MXC_Delay(uint32_t us);
+```
+
+<ParamField path="us" type="uint32_t" required>
+  Number of microseconds to delay. Use `MXC_DELAY_MSEC()` or `MXC_DELAY_SEC()` for convenient unit conversion.
+</ParamField>
+
+Blocks until the delay expires. Returns `E_NO_ERROR` on success.
+
+```c
+/* Block for 500 ms */
+MXC_Delay(MXC_DELAY_MSEC(500));
+```
+
+### `MXC_DelayAsync` — non-blocking delay
+
+```c
+int MXC_DelayAsync(uint32_t us, mxc_delay_complete_t callback);
+```
+
+<ParamField path="us" type="uint32_t" required>
+  Delay duration in microseconds.
+</ParamField>
+
+<ParamField path="callback" type="mxc_delay_complete_t">
+  Function pointer called when the delay expires or is aborted. The callback receives an `int` result code (`E_NO_ERROR` on normal completion, `E_ABORT` if aborted). Pass `NULL` to use `MXC_DelayCheck()` polling instead.
+</ParamField>
+
+Returns `E_NO_ERROR` if the async delay was started, or `E_BUSY` if a delay is already running.
+
+<Note>
+  On Cortex-M cores, `MXC_DelayHandler()` must be called from the SysTick ISR (or polled at a rate higher than the SysTick overflow rate) for `MXC_DelayAsync` to work correctly.
+</Note>
+
+```c
+void delay_done(int result)
+{
+    if (result == E_NO_ERROR) {
+        /* Delay completed normally */
+    }
+}
+
+MXC_DelayAsync(MXC_DELAY_SEC(2), delay_done);
+/* Application continues executing here */
+```
+
+### `MXC_DelayCheck` — poll async delay status
+
+```c
+int MXC_DelayCheck(void);
+```
+
+Returns `E_BUSY` while the delay is still running, or `E_NO_ERROR` when it has expired.
+
+```c
+MXC_DelayAsync(MXC_DELAY_MSEC(100), NULL);
+while (MXC_DelayCheck() == E_BUSY) {
+    /* do other work */
+}
+```
+
+### `MXC_DelayAbort` — cancel async delay
+
+```c
+void MXC_DelayAbort(void);
+```
+
+Cancels an active asynchronous delay. If a callback was registered it is invoked with `E_ABORT`.
+
+### `MXC_DelayHandler` — SysTick ISR hook (Cortex-M only)
+
+```c
+void MXC_DelayHandler(void);
+```
+
+Must be called from the `SysTick_Handler` interrupt service routine when using `MXC_DelayAsync` on a Cortex-M core.
+
+```c
+void SysTick_Handler(void)
+{
+    MXC_DelayHandler();
+}
+```
+
+---
+
+## Assertion macros
+
+Assertion support is compiled in only when `MXC_ASSERT_ENABLE` is defined at build time. Without that symbol, both macros expand to nothing — zero code size overhead in production builds.
+
+### `MXC_ASSERT(expr)`
+
+Evaluates `expr`. If the expression is false, calls `mxc_assert()` with the stringified expression, source file name, and line number.
+
+```c
+#define MXC_ASSERT(expr)                       \
+    if (!(expr)) {                             \
+        mxc_assert(#expr, __FILE__, __LINE__); \
+    }
+```
+
+```c
+void my_function(uint8_t *buf, int len)
+{
+    MXC_ASSERT(buf != NULL);
+    MXC_ASSERT(len > 0);
+    /* ... */
+}
+```
+
+### `MXC_ASSERT_FAIL()`
+
+Unconditionally triggers an assertion with the message `"FAIL"`.
+
+```c
+#define MXC_ASSERT_FAIL() mxc_assert("FAIL", __FILE__, __LINE__);
+```
+
+### `mxc_assert` callback
+
+The underlying assertion handler. Declared as a **weak function** so you can override it in your application to print debug output:
+
+```c
+void mxc_assert(const char *expr, const char *file, int line);
+```
+
+<ParamField path="expr" type="const char *" required>
+  String of the expression that failed the assertion.
+</ParamField>
+
+<ParamField path="file" type="const char *" required>
+  Source file name where the assertion fired.
+</ParamField>
+
+<ParamField path="line" type="int" required>
+  Line number of the failed assertion.
+</ParamField>
+
+Override example:
+
+```c
+/* In your application — overrides the weak default */
+void mxc_assert(const char *expr, const char *file, int line)
+{
+    printf("Assertion failed: %s, file: %s, line %d\n", expr, file, line);
+    while (1) {} /* Halt */
+}
+```
+
+To enable assertions, add `MXC_ASSERT_ENABLE` to your compiler flags in `project.mk`:
+
+```makefile
+PROJ_CFLAGS += -DMXC_ASSERT_ENABLE
+```
+
+---
+
+## Instruction Cache Controller (ICC)
+
+The Instruction Cache Controller (ICC) caches flash instructions in a fast on-chip SRAM cache, reducing average instruction-fetch latency and improving execution throughput. The API is declared in `icc.h`.
+
+All three functions take a pointer to the ICC register block. Use the `MXC_ICC` macro (defined in the device header) for the primary Cortex-M cache.
+
+### `MXC_ICC_Enable`
+
+```c
+void MXC_ICC_Enable(mxc_icc_regs_t *icc);
+```
+
+<ParamField path="icc" type="mxc_icc_regs_t *" required>
+  Pointer to the ICC register block. Pass `MXC_ICC` for the primary instruction cache.
+</ParamField>
+
+### `MXC_ICC_Disable`
+
+```c
+void MXC_ICC_Disable(mxc_icc_regs_t *icc);
+```
+
+<ParamField path="icc" type="mxc_icc_regs_t *" required>
+  Pointer to the ICC register block.
+</ParamField>
+
+### `MXC_ICC_Flush`
+
+Invalidates all lines in the instruction cache. Use this after writing new code to flash (for example, after an in-application firmware update) to ensure the CPU fetches updated instructions.
+
+```c
+void MXC_ICC_Flush(mxc_icc_regs_t *icc);
+```
+
+<ParamField path="icc" type="mxc_icc_regs_t *" required>
+  Pointer to the ICC register block.
+</ParamField>
+
+```c
+/* Enable the instruction cache on startup */
+MXC_ICC_Enable(MXC_ICC);
+
+/* After updating flash contents, flush stale cache lines */
+MXC_ICC_Flush(MXC_ICC);
+```
+
+<Note>
+  The ICC is typically enabled early in the startup sequence (before `main()`) by the MSDK system initialization code. You only need to call `MXC_ICC_Enable` explicitly if you have disabled it or are writing custom startup code.
+</Note>
+
+### `MXC_ICC_ID`
+
+Read a field from the Cache ID register for identification or debugging.
+
+```c
+int MXC_ICC_ID(mxc_icc_regs_t *icc, mxc_icc_info_t cid);
+```
+
+<ParamField path="icc" type="mxc_icc_regs_t *" required>
+  Pointer to the ICC register block.
+</ParamField>
+
+<ParamField path="cid" type="mxc_icc_info_t" required>
+  Field to read:
+
+  | Enumerator        | Description |
+  | ----------------- | ----------- |
+  | `ICC_INFO_RELNUM` | RTL release version |
+  | `ICC_INFO_PARTNUM`| Cache port number |
+  | `ICC_INFO_ID`     | Cache ID value |
+</ParamField>
+
+Returns the requested field value from the Cache ID register.
+
+---
+
+## `MSDK_NO_GPIO_CLK_INIT`
+
+Most peripheral initialization routines automatically enable the peripheral's system clock and configure the required GPIO pins. In some environments — such as when using Zephyr RTOS, which manages clocks and pins through its own device model — this automatic initialization is undesirable or conflicts with the framework.
+
+Set the `MSDK_NO_GPIO_CLK_INIT` compiler definition to disable automatic clock and GPIO initialization inside all `MXC_<PERIPH>_Init()` functions. Your application (or the framework) is then responsible for calling `MXC_SYS_ClockEnable()` and `MXC_GPIO_Config()` explicitly before using any peripheral.
+
+```makefile
+# project.mk
+PROJ_CFLAGS += -DMSDK_NO_GPIO_CLK_INIT
+```
+
+<Note>
+  The `-D` prefix tells the compiler to define `MSDK_NO_GPIO_CLK_INIT` as a preprocessor symbol at compile time. The symbol does not need a value — its presence alone activates the conditional compilation.
+</Note>

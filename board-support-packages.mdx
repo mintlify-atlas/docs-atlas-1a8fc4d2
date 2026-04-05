@@ -1,0 +1,246 @@
+---
+title: "Board Support Packages"
+description: "Learn what Board Support Packages are, how to select the right one for your hardware, how to create custom BSPs, and how to disable BSP integration entirely."
+---
+
+The MSDK supports multiple microcontrollers and evaluation platforms through **Board Support Packages (BSPs)**. For microcontrollers with more than one evaluation platform, multiple BSPs are available.
+
+## What is a BSP?
+
+A BSP provides a **hardware abstraction layer** for the initialization and management of board-level hardware — serial interfaces, push buttons, LEDs, external peripheral devices, TFT displays, and similar components that differ between evaluation platforms. This abstraction layer also improves portability of application code to custom hardware designs.
+
+<Note>
+The first task when opening or creating any project is to verify that the correct BSP is selected.
+</Note>
+
+## How to set the BSP
+
+The active BSP is controlled by two [build configuration variables](/build-configuration-variables):
+
+- **`TARGET`** — the target microcontroller (e.g., `MAX78000`)
+- **`BOARD`** — the BSP folder name for that microcontroller (e.g., `EvKit_V1`)
+
+How you set these depends on your development environment:
+
+<Tabs>
+  <Tab title="VS Code">
+    In VS Code, set `TARGET` and `BOARD` in the `.vscode/settings.json` file for the project — not in `project.mk`. Look for the `"MAXIM_PATH"`, `"target"`, and `"board"` keys under the MSDK settings.
+
+    <Warning>
+    Do not set `TARGET` or `BOARD` in `project.mk` when using VS Code. The IDE's settings take precedence and setting them in both places can cause conflicts.
+    </Warning>
+  </Tab>
+  <Tab title="Eclipse">
+    In Eclipse, set `TARGET` and `BOARD` in the project's build configuration settings — not in `project.mk`. Access these through **Project > Properties > C/C++ Build > Environment**.
+
+    <Warning>
+    Do not set `TARGET` or `BOARD` in `project.mk` when using Eclipse. Use the IDE's environment settings instead.
+    </Warning>
+  </Tab>
+  <Tab title="Command line">
+    For command-line development, set `TARGET` and `BOARD` in `project.mk`:
+
+    ```makefile
+    # project.mk
+    TARGET=MAX78000
+    BOARD=FTHR_RevA   # Set the BSP for the MAX78000FTHR
+    ```
+
+    You can also override the BSP for a single build without modifying any file:
+
+    ```bash
+    make -r -j BOARD=FTHR_RevA
+    ```
+
+    <Tip>
+    After changing `BOARD`, run `make distclean` before rebuilding to ensure all BSP-specific objects are recompiled cleanly.
+    </Tip>
+  </Tab>
+</Tabs>
+
+---
+
+## BSP table
+
+Available BSPs are located in `Libraries/Boards/<TARGET>/` within the MSDK installation. The folder name of each BSP is the string you use for the `BOARD` variable.
+
+The table below maps external part numbers to their correct `TARGET` and `BOARD` values:
+
+| External Part Number | `TARGET` | `BOARD` |
+|----------------------|----------|---------|
+| MAX32520-KIT | `MAX32520` | `EvKit_V1` |
+| MAX32520FTHR | `MAX32520` | `MAX32520FTHR` |
+| MAX32650-EVKIT | `MAX32650` | `EvKit_V1` |
+| MAX32650FTHR | `MAX32650` | `FTHR_APPS_A` |
+| MAX32655EVKIT | `MAX32655` | `EvKit_V1` |
+| MAX32655FTHR | `MAX32655` | `FTHR_Apps_P1` |
+| MAX32660-EVSYS | `MAX32660` | `EvKit_V1` |
+| MAX32662EVKIT | `MAX32662` | `EvKit_V1` |
+| MAX32666EVKIT | `MAX32665` | `EvKit_V1` |
+| MAX32666FTHR | `MAX32665` | `FTHR` |
+| MAX32666FTHR2 | `MAX32665` | `FTHR2` |
+| MAX32670EVKIT | `MAX32670` | `EvKit_V1` |
+| MAX32672EVKIT | `MAX32672` | `EvKit_V1` |
+| MAX32672FTHR | `MAX32672` | `FTHR` |
+| MAX32675EVKIT | `MAX32675` | `EvKit_V1` |
+| MAX32675FTHR | `MAX32675` | `FTHR_Apps_B` |
+| MAX32680EVKIT | `MAX32680` | `EvKit_V1` |
+| MAX32690EVKIT | `MAX32690` | `EvKit_V1` |
+| AD-APARD32690-SL | `MAX32690` | `APARD` |
+| MAX78000EVKIT | `MAX78000` | `EvKit_V1` |
+| MAX78000FTHR | `MAX78000` | `FTHR_RevA` |
+| MAXREFDES178 | `MAX78000` | `MAXREFDES178` |
+| MAX78000CAM01 (engineering samples only) | `MAX78000` | `CAM01_RevA` |
+| MAX78000CAM02 (engineering samples only) | `MAX78000` | `CAM02_RevA` |
+| MAX78002EVKIT | `MAX78002` | `EvKit_V1` |
+
+---
+
+## Custom BSPs
+
+You can create BSPs for custom boards and load them from outside the MSDK directory. A custom BSP integrates with the microcontroller's startup code through weak functions that your BSP can override.
+
+For example, the MAX78000 startup file (`system_max78000.c`) defines `Board_Init` and `SystemInit` as weak functions:
+
+```c
+/* Called before C runtime initialization. Return non-zero to skip C runtime init. */
+__weak int PreInit(void)
+{
+    return 0;
+}
+
+/* Override this function in your BSP to initialize board-level hardware */
+__weak int Board_Init(void)
+{
+    return 0;
+}
+
+/* Called just before main(). Override to customize system initialization. */
+__weak void SystemInit(void)
+{
+    SCB->VTOR = (uint32_t)__isr_vector;
+    MXC_ICC_Enable(MXC_ICC0);
+    SCB->CPACR |= SCB_CPACR_CP10_Msk | SCB_CPACR_CP11_Msk;
+    __DSB();
+    __ISB();
+    SystemCoreClockUpdate();
+    Board_Init();
+}
+```
+
+A custom BSP can override any or all of these weak functions.
+
+### File structure
+
+**`board.mk` is the only required file.** The rest of the structure below is recommended:
+
+```bash
+CustomBSP/          # Folder name = BOARD value
+├─ board.mk         # Required
+├─ Include/
+│  └─ board.h
+└─ Source/
+   └─ board.c
+```
+
+The name of the root folder is the string used with `BOARD` to select the BSP. For the structure above, you would use `BOARD=CustomBSP`.
+
+### BSP search directory
+
+By default, the MSDK searches for BSPs in `Libraries/Boards/<TARGET>/`. Use the `BSP_SEARCH_DIR` variable to load a BSP from a location outside the MSDK:
+
+```makefile
+# project.mk
+
+BSP_SEARCH_DIR=/home/username/mybsps
+BOARD=CustomBSP
+```
+
+With this configuration, the build system looks for the file at:
+
+```
+/home/username/mybsps/CustomBSP/board.mk
+```
+
+### Custom BSP template
+
+Use the following as a bare-bones starting point for a custom BSP.
+
+**`Include/board.h`**
+
+```c
+// board.h
+
+#define BOARD_CUSTOM
+// This preprocessor definition lets application code check which BSP is active:
+// #ifdef BOARD_CUSTOM
+//   ...
+// #endif
+
+/**
+ * \brief   Initialize the BSP and board interfaces.
+ * \returns #E_NO_ERROR if everything is successful
+ */
+int Board_Init(void);
+```
+
+**`Source/board.c`**
+
+```c
+// board.c
+#include "board.h"
+#include "mxc_error.h"
+
+int Board_Init(void)
+{
+    // Implement board initialization here
+    return E_NO_ERROR;
+}
+```
+
+**`board.mk`**
+
+```makefile
+# board.mk
+
+ifeq "$(BOARD_DIR)" ""
+# Self-locate if BOARD_DIR is not specified
+BOARD_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+endif
+
+SRCS += board.c
+VPATH += $(BOARD_DIR)/Source
+IPATH += $(BOARD_DIR)/Include
+```
+
+---
+
+## Disabling BSP integration
+
+Set `LIB_BOARD=0` to skip BSP integration entirely. This prevents the build system from loading `board.mk` and uses the default (empty) system initialization functions instead.
+
+```makefile
+# project.mk
+LIB_BOARD=0
+```
+
+This is useful when you want to implement a custom `Board_Init` directly in the project's application code, without creating a separate BSP folder:
+
+```c
+// main.c
+int Board_Init(void)
+{
+    // Custom board initialization inline in the project
+    return E_NO_ERROR;
+}
+
+int main(void)
+{
+    Board_Init();
+    // ...
+}
+```
+
+<Tip>
+The `LIB_BOARD=0` approach is a quick way to prototype board-specific initialization code before formalizing it into a standalone BSP.
+</Tip>

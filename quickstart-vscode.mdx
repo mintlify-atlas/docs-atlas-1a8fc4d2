@@ -1,0 +1,132 @@
+---
+title: "Quick start: Visual Studio Code"
+description: "Set up Visual Studio Code with the MSDK extensions, open an example project, and build, flash, and debug firmware on a MAX32xxx or MAX78xxx microcontroller."
+---
+
+The MSDK includes Visual Studio Code support through the [VSCode-Maxim](https://github.com/analogdevicesinc/VSCode-Maxim) project. VS Code sits on top of the MSDK's Make-based build system and provides IntelliSense, build tasks, and integrated debugging via the Cortex-Debug extension.
+
+<Note>
+This material is also available as a video tutorial targeting the MAX78000: [Understanding Artificial Intelligence Episode 8.5 — Visual Studio Code](https://www.analog.com/en/education/education-library/videos/6313212752112.html).
+</Note>
+
+## Prerequisites
+
+- The [MSDK is installed](/installation) on your system.
+- [Visual Studio Code](https://code.visualstudio.com/Download) is installed.
+- A supported evaluation platform and debug adapter (e.g., MAX32625PICO or CMSIS-DAP board).
+
+## Setup
+
+This setup only needs to be done once per MSDK installation.
+
+<Steps>
+  <Step title="Install the C/C++ extension">
+    Open VS Code and install the Microsoft [C/C++ extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode.cpptools) from the Extensions panel (`Ctrl+Shift+X`).
+  </Step>
+  <Step title="Install the Cortex-Debug extension">
+    Install the [Cortex-Debug extension](https://marketplace.visualstudio.com/items?itemName=marus25.cortex-debug) from the Extensions panel. This extension drives GDB and OpenOCD for embedded debugging.
+  </Step>
+  <Step title="Open User Settings (JSON)">
+    Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS) to open the command palette, type **open user settings**, and select **Preferences: Open User Settings (JSON)**.
+  </Step>
+  <Step title="Set MAXIM_PATH and disable auto-updates">
+    Add the following entries to your `settings.json` file:
+
+    ```json
+    {
+        "MAXIM_PATH": "C:/MaximSDK",
+        "update.mode": "manual",
+        "extensions.autoUpdate": false
+    }
+    ```
+
+    <Warning>
+    Set `MAXIM_PATH` to the **absolute path** of your MSDK installation. Use forward slashes (`/`) only — even on Windows.
+
+    Examples:
+    - Windows: `"MAXIM_PATH": "C:/MaximSDK"`
+    - Linux/macOS: `"MAXIM_PATH": "/home/username/MaximSDK"`
+    </Warning>
+
+    <Note>
+    `"update.mode": "manual"` and `"extensions.autoUpdate": false` disable automatic updates for VS Code and its extensions. This is optional but recommended to avoid unexpected changes to the build toolchain.
+    </Note>
+  </Step>
+  <Step title="Save and restart VS Code">
+    Save the file with `Ctrl+S`, then close and reopen VS Code to apply the changes.
+  </Step>
+</Steps>
+
+## Building and running a project
+
+<Steps>
+  <Step title="Launch VS Code and open a project folder">
+    Select **File → Open Folder...** and navigate to an example project for your target microcontroller inside the MSDK's `Examples` directory.
+
+    <Warning>
+    Copy the example project to a directory **outside** the MSDK before modifying it. This preserves the original source for reference. The project folder must be in a path **without spaces**.
+    </Warning>
+  </Step>
+  <Step title="Trust the folder">
+    VS Code will prompt you to trust the folder the first time it is opened. Select **Trust folder and enable all features**.
+  </Step>
+  <Step title="Set the Board Support Package">
+    Open the `.vscode/settings.json` file inside the project folder and set the `"board"` option to match your evaluation platform.
+
+    ```json
+    {
+        "target": "MAX78000",
+        "board": "MAX78000FTHR"
+    }
+    ```
+
+    <Note>
+    See the [Board Support Packages](https://analogdevicesinc.github.io/msdk//USERGUIDE/#board-support-packages) section of the MSDK User Guide for a full table of valid `board` values.
+    </Note>
+  </Step>
+  <Step title="Reload the VS Code window">
+    After saving `settings.json`, reload the window to force IntelliSense to re-index with the new configuration.
+
+    Press `Ctrl+Shift+P` and run **Developer: Reload Window**.
+  </Step>
+  <Step title="Build the project">
+    Press `Ctrl+Shift+B` to open the available build tasks (or navigate to **Terminal → Run Build Task...**).
+
+    Run the **build** task. The compiler output will appear in the terminal panel, and the compiled `.elf` binary will be placed in the project's `build/` subdirectory.
+  </Step>
+  <Step title="Connect the debug adapter">
+    Connect a compatible debug adapter between your host PC and the evaluation board. Refer to your board's Datasheet and Quick-Start Guide (available on the board's [analog.com](https://analog.com) product page) for hardware setup details.
+  </Step>
+  <Step title="Flash the firmware">
+    Run the **flash** build task (`Ctrl+Shift+B` → **flash**).
+
+    This task automatically builds the project if needed, programs the binary onto the target microcontroller via OpenOCD, and halts execution to await a debugger connection.
+  </Step>
+  <Step title="Launch the debugger">
+    Open the **Run and Debug** panel (`Ctrl+Shift+D`) and press **F5** (or click the green play button) to start a debug session.
+
+    The debugger will connect via GDB and break at the entry point of `main`.
+  </Step>
+  <Step title="Run and exercise the program">
+    Press **Continue** (`F5`) to run the program. Use the debugger control bar to step, pause, and inspect variables.
+
+    Available controls: **Continue** | **Step Over** | **Step Into** | **Step Out** | **Restart** | **Stop**
+  </Step>
+  <Step title="Disconnect the debugger">
+    Press **Stop** in the debugger control bar when finished to disconnect.
+  </Step>
+</Steps>
+
+## Key VS Code build tasks
+
+| Task | Description |
+|------|-------------|
+| `build` | Compile the project for the configured target and BSP |
+| `flash` | Build (if needed), flash via OpenOCD, and halt awaiting debugger |
+| `flash & run` | Flash and immediately run the program without attaching a debugger |
+| `clean` | Remove all build artifacts |
+| `clean-periph` | Clean build artifacts including peripheral library objects |
+
+<Tip>
+For complete VS Code usage documentation — including project creation, peripheral library configuration, and build variable reference — see the [Visual Studio Code section](https://analogdevicesinc.github.io/msdk//USERGUIDE/#visual-studio-code) of the MSDK User Guide.
+</Tip>

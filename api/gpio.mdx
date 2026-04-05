@@ -1,0 +1,342 @@
+---
+title: "GPIO"
+description: "Configure and control General-Purpose Input/Output pins on MAX78000 and MAX32xxx devices using the MSDK peripheral driver API."
+keywords: ["GPIO", "MAX78000", "MSDK", "mxc_gpio_cfg_t", "MXC_GPIO_Config", "interrupt", "pin"]
+---
+
+## Overview
+
+The GPIO peripheral driver provides a unified API for configuring and controlling digital I/O pins across all MAX78000 and MAX32xxx devices. Each device exposes between one and four GPIO ports (Port 0 through Port 3), with up to 32 pins per port. Pins are identified by a **port pointer** and a **bitmask**, so a single API call can affect multiple pins simultaneously.
+
+GPIO pins support five functional modes (input, output, and four alternate functions), two voltage domains (VDDIO and VDDIOH), configurable pull resistors, and edge- or level-triggered interrupts with per-pin callbacks.
+
+<Note>
+Include `gpio.h` and link against the PeriphDriver library for your target device. The board support package (BSP) provides pre-defined `mxc_gpio_cfg_t` constants for common peripherals in `mxc_pins.h`.
+</Note>
+
+---
+
+## Port and pin macros
+
+Ports and pins are expressed as bitmasks. Combine them using bitwise OR to address several pins at once.
+
+```c
+// Ports
+#define MXC_GPIO_PORT_0  ((uint32_t)(1UL << 0))
+#define MXC_GPIO_PORT_1  ((uint32_t)(1UL << 1))
+#define MXC_GPIO_PORT_2  ((uint32_t)(1UL << 2))
+#define MXC_GPIO_PORT_3  ((uint32_t)(1UL << 3))
+
+// Pins (PIN_0 through PIN_31)
+#define MXC_GPIO_PIN_0   ((uint32_t)(1UL << 0))
+#define MXC_GPIO_PIN_1   ((uint32_t)(1UL << 1))
+// ... through ...
+#define MXC_GPIO_PIN_31  ((uint32_t)(1UL << 31))
+```
+
+The port register base pointers (`MXC_GPIO0`, `MXC_GPIO1`, etc.) are defined in the device header and accepted wherever `mxc_gpio_regs_t *port` is required.
+
+---
+
+## Data types
+
+### `mxc_gpio_cfg_t`
+
+The primary configuration structure. Pass a pointer to this struct to `MXC_GPIO_Config()` and interrupt-related functions.
+
+```c
+typedef struct {
+    mxc_gpio_regs_t *port;   // Pointer to the GPIO port registers (e.g. MXC_GPIO0)
+    uint32_t         mask;   // Bitmask of pins to configure (e.g. MXC_GPIO_PIN_2)
+    mxc_gpio_func_t  func;   // Pin function: input, output, or alternate function
+    mxc_gpio_pad_t   pad;    // Pull-up / pull-down configuration
+    mxc_gpio_vssel_t vssel;  // Voltage domain: VDDIO or VDDIOH
+    mxc_gpio_drvstr_t drvstr; // Drive strength setting (DS[1:0] register bits)
+} mxc_gpio_cfg_t;
+```
+
+### `mxc_gpio_func_t` — pin function
+
+| Value | Description |
+|---|---|
+| `MXC_GPIO_FUNC_IN` | Digital input |
+| `MXC_GPIO_FUNC_OUT` | Digital output |
+| `MXC_GPIO_FUNC_ALT1` | Alternate function 1 (peripheral mapping) |
+| `MXC_GPIO_FUNC_ALT2` | Alternate function 2 |
+| `MXC_GPIO_FUNC_ALT3` | Alternate function 3 |
+| `MXC_GPIO_FUNC_ALT4` | Alternate function 4 |
+
+### `mxc_gpio_pad_t` — pad pull resistor
+
+| Value | Description |
+|---|---|
+| `MXC_GPIO_PAD_NONE` | No pull resistor |
+| `MXC_GPIO_PAD_PULL_UP` | Strong pull-up |
+| `MXC_GPIO_PAD_PULL_DOWN` | Strong pull-down |
+| `MXC_GPIO_PAD_WEAK_PULL_UP` | Weak pull-up |
+| `MXC_GPIO_PAD_WEAK_PULL_DOWN` | Weak pull-down |
+
+### `mxc_gpio_vssel_t` — voltage selection
+
+| Value | Description |
+|---|---|
+| `MXC_GPIO_VSSEL_VDDIO` | Pin operates at VDDIO level |
+| `MXC_GPIO_VSSEL_VDDIOH` | Pin operates at VDDIOH level |
+
+### `mxc_gpio_drvstr_t` — drive strength
+
+Sets the DS[1:0] register bits for the pin. The actual drive current is not linear and varies by pin and voltage level; consult the device datasheet.
+
+| Value | DS1 | DS0 |
+|---|---|---|
+| `MXC_GPIO_DRVSTR_0` | 0 | 0 |
+| `MXC_GPIO_DRVSTR_1` | 0 | 1 |
+| `MXC_GPIO_DRVSTR_2` | 1 | 0 |
+| `MXC_GPIO_DRVSTR_3` | 1 | 1 |
+
+### `mxc_gpio_int_pol_t` — interrupt polarity
+
+| Value | Description |
+|---|---|
+| `MXC_GPIO_INT_FALLING` | Falling-edge trigger |
+| `MXC_GPIO_INT_RISING` | Rising-edge trigger |
+| `MXC_GPIO_INT_BOTH` | Both edges trigger |
+| `MXC_GPIO_INT_HIGH` | Level-high trigger |
+| `MXC_GPIO_INT_LOW` | Level-low trigger |
+
+### Callback type
+
+```c
+typedef void (*mxc_gpio_callback_fn)(void *cbdata);
+```
+
+---
+
+## API reference
+
+### `MXC_GPIO_Init`
+
+```c
+int MXC_GPIO_Init(uint32_t portMask);
+```
+
+Initializes the GPIO peripheral clock for the specified port(s). Call once before using any GPIO API on a port.
+
+| Parameter | Description |
+|---|---|
+| `portMask` | Bitmask of ports to initialize (e.g. `MXC_GPIO_PORT_0 \| MXC_GPIO_PORT_1`) |
+
+Returns `E_NO_ERROR` on success.
+
+---
+
+### `MXC_GPIO_Config`
+
+```c
+int MXC_GPIO_Config(const mxc_gpio_cfg_t *cfg);
+```
+
+Configures one or more pins according to `cfg`. Sets the function, pad, voltage domain, and drive strength for every pin in `cfg->mask` on `cfg->port`.
+
+Returns `E_NO_ERROR` on success, `E_BAD_PARAM` if an argument is invalid.
+
+<Warning>
+If `MXC_GPIO_SetConfigLock(MXC_GPIO_CONFIG_LOCKED)` has been called, this function has no effect. Check the lock state with `MXC_GPIO_GetConfigLock()` if configuration changes appear to be silently ignored.
+</Warning>
+
+---
+
+### Output control
+
+```c
+void MXC_GPIO_OutSet(mxc_gpio_regs_t *port, uint32_t mask);
+```
+Drives the selected pins high.
+
+```c
+void MXC_GPIO_OutClr(mxc_gpio_regs_t *port, uint32_t mask);
+```
+Drives the selected pins low.
+
+```c
+void MXC_GPIO_OutToggle(mxc_gpio_regs_t *port, uint32_t mask);
+```
+Toggles the current output level of the selected pins.
+
+```c
+void MXC_GPIO_OutPut(mxc_gpio_regs_t *port, uint32_t mask, uint32_t val);
+```
+Writes `val` to the selected pins (masked by `mask`).
+
+```c
+uint32_t MXC_GPIO_OutGet(mxc_gpio_regs_t *port, uint32_t mask);
+```
+Returns the current output register state for the selected pins.
+
+---
+
+### Input
+
+```c
+uint32_t MXC_GPIO_InGet(mxc_gpio_regs_t *port, uint32_t mask);
+```
+
+Returns the logic level currently present on the selected pins. Each set bit in the return value corresponds to a pin that is reading high.
+
+---
+
+### Interrupts
+
+```c
+int MXC_GPIO_IntConfig(const mxc_gpio_cfg_t *cfg, mxc_gpio_int_pol_t pol);
+```
+Configures the interrupt trigger mode and polarity for the pins in `cfg`. Call before enabling the interrupt.
+
+```c
+void MXC_GPIO_EnableInt(mxc_gpio_regs_t *port, uint32_t mask);
+```
+Enables GPIO interrupts for the selected pins.
+
+```c
+void MXC_GPIO_DisableInt(mxc_gpio_regs_t *port, uint32_t mask);
+```
+Disables GPIO interrupts for the selected pins.
+
+```c
+uint32_t MXC_GPIO_GetFlags(mxc_gpio_regs_t *port);
+```
+Returns the pending interrupt flags for a port.
+
+```c
+void MXC_GPIO_ClearFlags(mxc_gpio_regs_t *port, uint32_t flags);
+```
+Clears the specified interrupt flags.
+
+---
+
+### `MXC_GPIO_RegisterCallback`
+
+```c
+void MXC_GPIO_RegisterCallback(const mxc_gpio_cfg_t *cfg,
+                                mxc_gpio_callback_fn  callback,
+                                void                 *cbdata);
+```
+
+Associates a callback function with the pin(s) described in `cfg`. When an interrupt fires and `MXC_GPIO_Handler()` is called from the ISR, the registered callback receives `cbdata` as its argument.
+
+---
+
+### `MXC_GPIO_Handler`
+
+```c
+void MXC_GPIO_Handler(unsigned int port);
+```
+
+ISR dispatcher. Call this from the GPIO interrupt handler for `port`. It clears the interrupt flags and invokes any registered callbacks.
+
+```c
+// Example ISR wiring
+void GPIO2_IRQHandler(void)
+{
+    MXC_GPIO_Handler(2);
+}
+```
+
+---
+
+### Wakeup source
+
+```c
+void MXC_GPIO_SetWakeEn(mxc_gpio_regs_t *port, uint32_t mask);
+void MXC_GPIO_ClearWakeEn(mxc_gpio_regs_t *port, uint32_t mask);
+uint32_t MXC_GPIO_GetWakeEn(mxc_gpio_regs_t *port);
+```
+
+Enable or disable individual pins as low-power wakeup sources.
+
+---
+
+### Miscellaneous
+
+```c
+int MXC_GPIO_SetVSSEL(mxc_gpio_regs_t *port, mxc_gpio_vssel_t vssel, uint32_t mask);
+int MXC_GPIO_SetDriveStrength(mxc_gpio_regs_t *port, mxc_gpio_drvstr_t drvstr, uint32_t mask);
+void MXC_GPIO_SetConfigLock(mxc_gpio_config_lock_t locked);
+mxc_gpio_config_lock_t MXC_GPIO_GetConfigLock(void);
+int MXC_GPIO_Shutdown(uint32_t portMask);
+int MXC_GPIO_Reset(uint32_t portMask);
+```
+
+---
+
+## Code example: LED output and button input with interrupt
+
+This example mirrors the `Examples/MAX78000/GPIO/main.c` reference implementation. It configures an output pin (LED), a polled input pin (button), and an interrupt-driven input pin whose callback toggles a second LED.
+
+```c
+#include "gpio.h"
+#include "mxc_device.h"
+#include "nvic_table.h"
+
+// Callback: toggle the status LED on each falling-edge interrupt
+void gpio_isr(void *cbdata)
+{
+    mxc_gpio_cfg_t *cfg = cbdata;
+    MXC_GPIO_OutToggle(cfg->port, cfg->mask);
+}
+
+int main(void)
+{
+    // --- Output pin (LED) ---
+    mxc_gpio_cfg_t gpio_out = {
+        .port   = MXC_GPIO0,
+        .mask   = MXC_GPIO_PIN_2,
+        .func   = MXC_GPIO_FUNC_OUT,
+        .pad    = MXC_GPIO_PAD_NONE,
+        .vssel  = MXC_GPIO_VSSEL_VDDIO,
+        .drvstr = MXC_GPIO_DRVSTR_0,
+    };
+    MXC_GPIO_Config(&gpio_out);
+
+    // --- Polled input (button, active-low) ---
+    mxc_gpio_cfg_t gpio_in = {
+        .port   = MXC_GPIO2,
+        .mask   = MXC_GPIO_PIN_6,
+        .func   = MXC_GPIO_FUNC_IN,
+        .pad    = MXC_GPIO_PAD_PULL_UP,
+        .vssel  = MXC_GPIO_VSSEL_VDDIO,
+        .drvstr = MXC_GPIO_DRVSTR_0,
+    };
+    MXC_GPIO_Config(&gpio_in);
+
+    // --- Interrupt-driven input (second button) ---
+    mxc_gpio_cfg_t gpio_irq = {
+        .port   = MXC_GPIO2,
+        .mask   = MXC_GPIO_PIN_7,
+        .func   = MXC_GPIO_FUNC_IN,
+        .pad    = MXC_GPIO_PAD_PULL_UP,
+        .vssel  = MXC_GPIO_VSSEL_VDDIOH,
+        .drvstr = MXC_GPIO_DRVSTR_0,
+    };
+    MXC_GPIO_Config(&gpio_irq);
+
+    // Register callback and enable interrupt on falling edge
+    MXC_GPIO_RegisterCallback(&gpio_irq, gpio_isr, &gpio_out);
+    MXC_GPIO_IntConfig(&gpio_irq, MXC_GPIO_INT_FALLING);
+    MXC_GPIO_EnableInt(gpio_irq.port, gpio_irq.mask);
+    NVIC_EnableIRQ(MXC_GPIO_GET_IRQ(MXC_GPIO_GET_IDX(MXC_GPIO2)));
+
+    while (1) {
+        // Mirror button state onto the LED
+        if (MXC_GPIO_InGet(gpio_in.port, gpio_in.mask)) {
+            MXC_GPIO_OutSet(gpio_out.port, gpio_out.mask);
+        } else {
+            MXC_GPIO_OutClr(gpio_out.port, gpio_out.mask);
+        }
+    }
+}
+```
+
+<Tip>
+The BSP header `mxc_pins.h` provides pre-built `mxc_gpio_cfg_t` constants for every peripheral alternate function (e.g. `gpio_cfg_uart0`, `gpio_cfg_spi1`). Pass these directly to `MXC_GPIO_Config()` instead of building the struct by hand.
+</Tip>
